@@ -21,6 +21,7 @@ contract Perpetual {
     using SafeERC20 for IERC20;
 
     uint256 public constant MAX_LEVERAGE = 20;
+    uint256 public constant MAX_UTILISATION_PERCENT = 8000;
 
     /////////////////////
     ///// Positions ////
@@ -34,6 +35,12 @@ contract Perpetual {
     }
 
     mapping(address => Position) public s_positions;
+    uint256 public s_totalLockedLiquidity; // total collateral amount
+
+    uint256 public s_openInterestLongUsd;
+    uint256 public s_openInterestShortUsd;
+    uint256 public s_openInterestLongToken;
+    uint256 public s_openInterestShortToken;
 
     /////////////////////
     //// Immutables ////
@@ -81,6 +88,16 @@ contract Perpetual {
 
         uint256 currentPrice = getLatestPrice();
 
+        s_totalLockedLiquidity += _collateralAmount;
+        uint256 sizeInUsd = _size * currentPrice;
+        if (_isLong) {
+            s_openInterestLongUsd += sizeInUsd;
+            s_openInterestLongToken += _size;
+        } else {
+            s_openInterestShortUsd += sizeInUsd;
+            s_openInterestShortToken += _size;
+        }
+
         s_positions[msg.sender] =
             Position({size: _size, collateralAmount: _collateralAmount, openPrice: currentPrice, isLong: _isLong});
 
@@ -90,15 +107,22 @@ contract Perpetual {
 
     function increaseSize(uint256 _additionalSize) external noZeroValue(_additionalSize) {
         Position storage position = s_positions[msg.sender];
-
         if (position.size == 0) revert Perpetual__PositionDoesNotExist();
-        uint256 newTotalSize = position.size + _additionalSize;
 
+        uint256 newTotalSize = position.size + _additionalSize;
         uint256 leverage = newTotalSize / position.collateralAmount;
         if (leverage > MAX_LEVERAGE) revert Perpetual__MaxLeverageExceeded();
 
-        position.size = newTotalSize;
+        uint256 additionalSizeInUsd = _additionalSize * getLatestPrice();
+        if (position.isLong) {
+            s_openInterestLongUsd += additionalSizeInUsd;
+            s_openInterestLongToken += _additionalSize;
+        } else {
+            s_openInterestShortUsd += additionalSizeInUsd;
+            s_openInterestShortToken += _additionalSize;
+        }
 
+        position.size = newTotalSize;
         emit PositionSizeIncreased(msg.sender, position, _additionalSize);
     }
 
@@ -108,10 +132,44 @@ contract Perpetual {
         if (position.size == 0) revert Perpetual__PositionDoesNotExist();
 
         position.collateralAmount += _additionalCollateral;
-
+        s_totalLockedLiquidity += _additionalCollateral;
         i_collateralToken.safeTransferFrom(msg.sender, address(i_vault), _additionalCollateral);
 
         emit CollateralIncreased(msg.sender, position, _additionalCollateral);
+    }
+
+    //////////////////////
+    ////// Utility //////
+    ////////////////////
+
+    function calculatePnL(uint256 _openPrice, uint256 _size, bool _isLong) public view returns (int256) {
+        uint256 currentMarketValue = getLatestPrice();
+
+        if (_isLong) {
+            if (currentMarketValue > _openPrice) {
+                return int256(currentMarketValue - _openPrice) * int256(_size);
+            } else {
+                return -int256(_openPrice - currentMarketValue) * int256(_size);
+            }
+        } else {
+            if (_openPrice > currentMarketValue) {
+                return int256(_openPrice - currentMarketValue) * int256(_size);
+            } else {
+                return -int256(currentMarketValue - _openPrice) * int256(_size);
+            }
+        }
+    }
+
+    function validateLiquidityReserve(uint256 _size, bool _isLong) public returns (bool) {
+        uint256 sizeInUsd = _size * getLatestPrice();
+        uint256 totalLiquidity = i_vault.totalAssets();
+        uint256 maxLiquidityUsage = (totalLiquidity * MAX_UTILISATION_PERCENT) / 10000;
+
+        if (_isLong) {
+            return (s_openInterestShortUsd + (s_openInterestLongToken + _size) * getLatestPrice()) < maxLiquidityUsage;
+        } else {
+            return (s_openInterestLongUsd + s_openInterestShortToken + _size) < maxLiquidityUsage;
+        }
     }
 
     /////////////////////
@@ -125,5 +183,12 @@ contract Perpetual {
 
     function getTotalPnL() public view returns (int256) {}
 
-    function getAvailableLiquidity() public view returns (uint256) {}
+    function getAvailableLiquidity() public returns (uint256) {
+        uint256 totalLiquidity = i_vault.totalAssets();
+        uint256 lockedLiquidity = s_totalLockedLiquidity;
+        if (lockedLiquidity > totalLiquidity) {
+            return 0;
+        }
+        return totalLiquidity - lockedLiquidity;
+    }
 }
