@@ -2,4 +2,6 @@
 
 pragma solidity 0.8.19;
 
-interface IVault {}
+interface IVault {
+    function totalAssets() external returns (uint256);
+}
