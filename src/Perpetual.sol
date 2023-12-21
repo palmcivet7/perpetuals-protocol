@@ -171,16 +171,15 @@ contract Perpetual {
         }
     }
 
-    function validateLiquidityReserve(uint256 _size, bool _isLong) public returns (bool) {
+    function validateLiquidityReserve(uint256 _size, bool _isLong) private returns (bool) {
         uint256 sizeInUsd = _size * getLatestPrice();
         uint256 totalLiquidity = i_vault.totalAssets();
         uint256 maxLiquidityUsage = (totalLiquidity * MAX_UTILISATION_PERCENT) / 10000;
 
         if (_isLong) {
-            return
-                (s_openInterestShortUsd + (s_openInterestLongToken + sizeInUsd) * getLatestPrice()) < maxLiquidityUsage;
+            return (s_openInterestShortUsd + (s_openInterestLongUsd + sizeInUsd)) < maxLiquidityUsage;
         } else {
-            return (s_openInterestLongUsd + s_openInterestShortToken + sizeInUsd) < maxLiquidityUsage;
+            return (s_openInterestLongUsd + (s_openInterestShortToken + _size) * getLatestPrice()) < maxLiquidityUsage;
         }
     }
 
