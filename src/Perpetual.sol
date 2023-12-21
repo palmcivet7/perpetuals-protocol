@@ -13,6 +13,7 @@ contract Perpetual {
     error Perpetual__MaxLeverageExceeded();
     error Perpetual__TokenTransferFailed();
     error Perpetual__PositionDoesNotExist();
+    error Perpetual__InsufficientLiquidity();
 
     event PositionOpened(address, Position);
     event PositionSizeIncreased(address, Position, uint256 sizeIncrease);
@@ -74,6 +75,11 @@ contract Perpetual {
         _;
     }
 
+    modifier validateLiquidity(uint256 _size, bool _isLong) {
+        if (!validateLiquidityReserve(_size, _isLong)) revert Perpetual__InsufficientLiquidity();
+        _;
+    }
+
     /////////////////////
     ////// User ////////
     ///////////////////
@@ -82,6 +88,7 @@ contract Perpetual {
         external
         noZeroValue(_size)
         noZeroValue(_collateralAmount)
+        validateLiquidity(_size, _isLong)
     {
         uint256 leverage = _size / _collateralAmount;
         if (leverage > MAX_LEVERAGE) revert Perpetual__MaxLeverageExceeded();
@@ -105,7 +112,11 @@ contract Perpetual {
         emit PositionOpened(msg.sender, s_positions[msg.sender]);
     }
 
-    function increaseSize(uint256 _additionalSize) external noZeroValue(_additionalSize) {
+    function increaseSize(uint256 _additionalSize)
+        external
+        noZeroValue(_additionalSize)
+        validateLiquidity(_additionalSize, s_positions[msg.sender].isLong)
+    {
         Position storage position = s_positions[msg.sender];
         if (position.size == 0) revert Perpetual__PositionDoesNotExist();
 
@@ -166,9 +177,10 @@ contract Perpetual {
         uint256 maxLiquidityUsage = (totalLiquidity * MAX_UTILISATION_PERCENT) / 10000;
 
         if (_isLong) {
-            return (s_openInterestShortUsd + (s_openInterestLongToken + _size) * getLatestPrice()) < maxLiquidityUsage;
+            return
+                (s_openInterestShortUsd + (s_openInterestLongToken + sizeInUsd) * getLatestPrice()) < maxLiquidityUsage;
         } else {
-            return (s_openInterestLongUsd + s_openInterestShortToken + _size) < maxLiquidityUsage;
+            return (s_openInterestLongUsd + s_openInterestShortToken + sizeInUsd) < maxLiquidityUsage;
         }
     }
 
