@@ -3,7 +3,7 @@
 pragma solidity 0.8.19;
 
 import {Script} from "forge-std/Script.sol";
-import {MockV3Aggregator} from "../src/mocks/MockV3Aggregator.sol";
+import {MockV3Aggregator} from "@chainlink/contracts/src/v0.8/tests/MockV3Aggregator.sol";
 import {Vault} from "../src/Vault.sol";
 import {MockUSDC} from "../src/mocks/MockUSDC.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
