@@ -23,6 +23,7 @@ contract Perpetual {
 
     uint256 public constant MAX_LEVERAGE = 20;
     uint256 public constant MAX_UTILISATION_PERCENT = 8000;
+    uint256 private constant PRECISION = 1e18;
 
     /////////////////////
     ///// Positions ////
@@ -96,7 +97,7 @@ contract Perpetual {
         uint256 currentPrice = getLatestPrice();
 
         s_totalLockedLiquidity += _collateralAmount;
-        uint256 sizeInUsd = _size * currentPrice;
+        uint256 sizeInUsd = (_size * currentPrice) / PRECISION;
         if (_isLong) {
             s_openInterestLongUsd += sizeInUsd;
             s_openInterestLongToken += _size;
@@ -124,7 +125,7 @@ contract Perpetual {
         uint256 leverage = newTotalSize / position.collateralAmount;
         if (leverage > MAX_LEVERAGE) revert Perpetual__MaxLeverageExceeded();
 
-        uint256 additionalSizeInUsd = _additionalSize * getLatestPrice();
+        uint256 additionalSizeInUsd = (_additionalSize * getLatestPrice()) * PRECISION;
         if (position.isLong) {
             s_openInterestLongUsd += additionalSizeInUsd;
             s_openInterestLongToken += _additionalSize;
@@ -192,7 +193,19 @@ contract Perpetual {
         return uint256(price);
     }
 
-    function getTotalPnL() public view returns (int256) {}
+    function getTotalPnL() public view returns (int256) {
+        return getTotalLongPnL() + getTotalShortPnL();
+    }
+
+    function getTotalLongPnL() public view returns (int256) {
+        uint256 longValue = (s_openInterestLongToken * getLatestPrice()) / PRECISION;
+        return int256(longValue - s_openInterestLongUsd);
+    }
+
+    function getTotalShortPnL() public view returns (int256) {
+        uint256 shortValue = (s_openInterestLongToken * getLatestPrice()) / PRECISION;
+        return int256(s_openInterestShortUsd - shortValue);
+    }
 
     function getAvailableLiquidity() public returns (uint256) {
         uint256 totalLiquidity = i_vault.totalAssets();
