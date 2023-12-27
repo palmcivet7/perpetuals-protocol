@@ -9,6 +9,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 contract Vault is ERC4626, Ownable {
     error Vault__InvalidAddress();
+    error Vault__InvalidValue();
     error Vault__NotEnoughLiquidity();
 
     IPerpetual public s_perpetual;
@@ -18,6 +19,9 @@ contract Vault is ERC4626, Ownable {
     }
 
     function withdraw(uint256 _assets, address _receiver, address _owner) public override returns (uint256) {
+        if (_assets == 0) revert Vault__InvalidValue();
+        if (_receiver == address(0)) revert Vault__InvalidAddress();
+        if (_owner == address(0)) revert Vault__InvalidAddress();
         uint256 availableLiquidity = s_perpetual.getAvailableLiquidity();
         if (_assets > availableLiquidity) revert Vault__NotEnoughLiquidity();
         return super.withdraw(_assets, _receiver, _owner);
