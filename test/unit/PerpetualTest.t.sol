@@ -83,10 +83,48 @@ contract PerpetualTest is Test {
         vm.stopPrank();
     }
 
+    /*//////////////////////////////////////////////////////////////
+                             VAULT CONTRACT
+    //////////////////////////////////////////////////////////////*/
+
     function test_vault_withdraw_reverts_if_assets_are_zero() public {
         vm.startPrank(LIQUIDITY_PROVIDER);
         vm.expectRevert(Vault.Vault__InvalidValue.selector);
         vault.withdraw(0, address(0), address(0));
         vm.stopPrank();
+    }
+
+    function test_vault_withdraw_reverts_if_receiver_is_zero_address() public {
+        vm.startPrank(LIQUIDITY_PROVIDER);
+        vm.expectRevert(Vault.Vault__InvalidAddress.selector);
+        vault.withdraw(1, address(0), address(0));
+        vm.stopPrank();
+    }
+
+    function test_vault_withdraw_reverts_if_owner_is_zero_address() public {
+        vm.startPrank(LIQUIDITY_PROVIDER);
+        vm.expectRevert(Vault.Vault__InvalidAddress.selector);
+        vault.withdraw(1, address(1), address(0));
+        vm.stopPrank();
+    }
+
+    function test_vault_withdraw_reverts_if_not_enough_available_liquidity() public liquidityDeposited {
+        vm.startPrank(LIQUIDITY_PROVIDER);
+        vm.expectRevert(Vault.Vault__NotEnoughLiquidity.selector);
+        vault.withdraw(ONE_THOUSAND_USDC * 2, LIQUIDITY_PROVIDER, LIQUIDITY_PROVIDER);
+        vm.stopPrank();
+    }
+
+    function test_vault_withdraw_works() public liquidityDeposited {
+        vm.startPrank(LIQUIDITY_PROVIDER);
+        uint256 userBalanceStart = mockUsdc.balanceOf(LIQUIDITY_PROVIDER);
+        uint256 vaultBalanceStart = mockUsdc.balanceOf(address(vault));
+        vault.withdraw(ONE_THOUSAND_USDC, LIQUIDITY_PROVIDER, LIQUIDITY_PROVIDER);
+        uint256 userBalanceEnd = mockUsdc.balanceOf(LIQUIDITY_PROVIDER);
+        uint256 vaultBalanceEnd = mockUsdc.balanceOf(address(vault));
+        vm.stopPrank();
+
+        assertEq(userBalanceStart, vaultBalanceEnd);
+        assertEq(vaultBalanceStart, userBalanceEnd);
     }
 }
