@@ -82,4 +82,11 @@ contract PerpetualTest is Test {
         console.log("vaultBalanceOf:", vaultBalanceOf);
         vm.stopPrank();
     }
+
+    function test_vault_withdraw_reverts_if_assets_are_zero() public {
+        vm.startPrank(LIQUIDITY_PROVIDER);
+        vm.expectRevert(Vault.Vault__InvalidValue.selector);
+        vault.withdraw(0, address(0), address(0));
+        vm.stopPrank();
+    }
 }
