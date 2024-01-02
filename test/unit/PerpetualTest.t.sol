@@ -76,10 +76,18 @@ contract PerpetualTest is Test {
         _;
     }
 
-    function test_openPosition_works() public liquidityDeposited {
-        vm.startPrank(msg.sender);
-        uint256 vaultBalanceOf = vault.balanceOf(LIQUIDITY_PROVIDER);
-        console.log("vaultBalanceOf:", vaultBalanceOf);
+    modifier traderApproveCollateralTokenForPerpetualContract() {
+        vm.startPrank(TRADER);
+        mockUsdc.approve(address(perpetual), ONE_THOUSAND_USDC);
+        vm.stopPrank();
+        _;
+    }
+
+    function test_openPosition_works() public liquidityDeposited traderApproveCollateralTokenForPerpetualContract {
+        vm.startPrank(TRADER);
+        // uint256 vaultBalanceOf = vault.balanceOf(LIQUIDITY_PROVIDER);
+        // console.log("vaultBalanceOf:", vaultBalanceOf);
+        perpetual.openPosition(1e18, ONE_THOUSAND_USDC, true);
         vm.stopPrank();
     }
 
