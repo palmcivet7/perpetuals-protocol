@@ -175,7 +175,7 @@ contract Perpetual {
     }
 
     function validateLiquidityReserve(uint256 _size, bool _isLong) private returns (bool) {
-        uint256 sizeInUsd = _size * getLatestPrice();
+        uint256 sizeInUsd = _size * getLatestPrice() / PRECISION;
         uint256 totalLiquidity = i_vault.totalAssets();
         uint256 maxLiquidityUsage = (totalLiquidity * MAX_UTILISATION_PERCENT) / 10000;
 
@@ -192,7 +192,7 @@ contract Perpetual {
 
     function getLatestPrice() public view returns (uint256) {
         (, int256 price,,,) = i_priceFeed.latestRoundData();
-        return uint256(price);
+        return uint256(price) * 10 ** 10;
     }
 
     function getTotalPnL() public view returns (int256) {

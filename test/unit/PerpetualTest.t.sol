@@ -21,6 +21,7 @@ contract PerpetualTest is Test {
     address public TRADER = makeAddr("TRADER");
     uint256 public constant STARTING_USER_BALANCE = 1000 ether;
     uint256 public constant ONE_THOUSAND_USDC = 1000_000000;
+    uint256 public constant TEN_THOUSAND_USDC = 10000_000000;
 
     function setUp() external {
         DeployPerpetual deployer = new DeployPerpetual();
@@ -36,7 +37,7 @@ contract PerpetualTest is Test {
         vm.deal(LIQUIDITY_PROVIDER, STARTING_USER_BALANCE);
         vm.deal(TRADER, STARTING_USER_BALANCE);
         vm.prank(LIQUIDITY_PROVIDER);
-        mockUsdc.mintTokens(ONE_THOUSAND_USDC);
+        mockUsdc.mintTokens(TEN_THOUSAND_USDC);
         vm.prank(TRADER);
         mockUsdc.mintTokens(ONE_THOUSAND_USDC);
     }
@@ -70,8 +71,8 @@ contract PerpetualTest is Test {
 
     modifier liquidityDeposited() {
         vm.startPrank(LIQUIDITY_PROVIDER);
-        mockUsdc.approve(address(vault), ONE_THOUSAND_USDC);
-        vault.deposit(ONE_THOUSAND_USDC, LIQUIDITY_PROVIDER);
+        mockUsdc.approve(address(vault), TEN_THOUSAND_USDC);
+        vault.deposit(TEN_THOUSAND_USDC, LIQUIDITY_PROVIDER);
         vm.stopPrank();
         _;
     }
@@ -85,9 +86,7 @@ contract PerpetualTest is Test {
 
     function test_openPosition_works() public liquidityDeposited traderApproveCollateralTokenForPerpetualContract {
         vm.startPrank(TRADER);
-        // uint256 vaultBalanceOf = vault.balanceOf(LIQUIDITY_PROVIDER);
-        // console.log("vaultBalanceOf:", vaultBalanceOf);
-        perpetual.openPosition(1e18, ONE_THOUSAND_USDC, true);
+        perpetual.openPosition(1, ONE_THOUSAND_USDC, true);
         vm.stopPrank();
     }
 

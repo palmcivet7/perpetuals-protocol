@@ -17,8 +17,8 @@ contract HelperConfig is Script {
 
     NetworkConfig public activeNetworkConfig;
 
-    uint8 public constant DECIMALS = 18;
-    int256 public constant ETH_USD_PRICE = 2000e18;
+    uint8 public constant DECIMALS = 8;
+    int256 public constant ETH_USD_PRICE = 2000e8;
 
     constructor() {
         if (block.chainid == 11155111) {
