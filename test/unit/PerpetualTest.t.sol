@@ -118,7 +118,7 @@ contract PerpetualTest is Test {
     function test_vault_withdraw_reverts_if_not_enough_available_liquidity() public liquidityDeposited {
         vm.startPrank(LIQUIDITY_PROVIDER);
         vm.expectRevert(Vault.Vault__NotEnoughLiquidity.selector);
-        vault.withdraw(ONE_THOUSAND_USDC * 2, LIQUIDITY_PROVIDER, LIQUIDITY_PROVIDER);
+        vault.withdraw(TEN_THOUSAND_USDC * 2, LIQUIDITY_PROVIDER, LIQUIDITY_PROVIDER);
         vm.stopPrank();
     }
 
@@ -126,7 +126,7 @@ contract PerpetualTest is Test {
         vm.startPrank(LIQUIDITY_PROVIDER);
         uint256 userBalanceStart = mockUsdc.balanceOf(LIQUIDITY_PROVIDER);
         uint256 vaultBalanceStart = mockUsdc.balanceOf(address(vault));
-        vault.withdraw(ONE_THOUSAND_USDC, LIQUIDITY_PROVIDER, LIQUIDITY_PROVIDER);
+        vault.withdraw(TEN_THOUSAND_USDC, LIQUIDITY_PROVIDER, LIQUIDITY_PROVIDER);
         uint256 userBalanceEnd = mockUsdc.balanceOf(LIQUIDITY_PROVIDER);
         uint256 vaultBalanceEnd = mockUsdc.balanceOf(address(vault));
         vm.stopPrank();
