@@ -48,6 +48,10 @@ contract PerpetualTest is Test {
         assertEq(address(mockUsdc), address(perpetual.i_collateralToken()));
     }
 
+    /*//////////////////////////////////////////////////////////////
+                             OPEN POSITION
+    //////////////////////////////////////////////////////////////*/
+
     function test_openPosition_reverts_if_size_is_zero() public {
         vm.startPrank(TRADER);
         vm.expectRevert(Perpetual.Perpetual__InvalidValue.selector);
@@ -87,6 +91,22 @@ contract PerpetualTest is Test {
     function test_openPosition_works() public liquidityDeposited traderApproveCollateralTokenForPerpetualContract {
         vm.startPrank(TRADER);
         perpetual.openPosition(1, ONE_THOUSAND_USDC, true);
+        vm.stopPrank();
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                             INCREASE SIZE
+    //////////////////////////////////////////////////////////////*/
+
+    function test_increaseSize_reverts_if_size_is_zero()
+        public
+        liquidityDeposited
+        traderApproveCollateralTokenForPerpetualContract
+    {
+        vm.startPrank(TRADER);
+        perpetual.openPosition(1, ONE_THOUSAND_USDC, true);
+        vm.expectRevert(Perpetual.Perpetual__InvalidValue.selector);
+        perpetual.increaseSize(0);
         vm.stopPrank();
     }
 
