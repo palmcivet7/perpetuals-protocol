@@ -114,13 +114,13 @@ contract Perpetual {
         emit PositionOpened(msg.sender, s_positions[msg.sender]);
     }
 
-    function increaseSize(uint256 _additionalSize)
-        external
-        noZeroValue(_additionalSize)
-        validateLiquidity(_additionalSize, s_positions[msg.sender].isLong)
-    {
+    function increaseSize(uint256 _additionalSize) external noZeroValue(_additionalSize) {
         Position storage position = s_positions[msg.sender];
         if (position.size == 0) revert Perpetual__PositionDoesNotExist();
+
+        if (!validateLiquidityReserve(_additionalSize, position.isLong)) {
+            revert Perpetual__InsufficientLiquidity();
+        }
 
         uint256 newTotalSize = position.size + _additionalSize;
         uint256 leverage = newTotalSize / position.collateralAmount;
