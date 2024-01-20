@@ -54,9 +54,9 @@ contract Perpetual {
     IERC20 public immutable i_collateralToken;
 
     constructor(address _priceFeed, address _vault, address _collateralToken)
-        noZeroAddress(_priceFeed)
-        noZeroAddress(_vault)
-        noZeroAddress(_collateralToken)
+        revertIfZeroAddress(_priceFeed)
+        revertIfZeroAddress(_vault)
+        revertIfZeroAddress(_collateralToken)
     {
         i_priceFeed = AggregatorV3Interface(_priceFeed);
         i_vault = IVault(_vault);
@@ -67,12 +67,12 @@ contract Perpetual {
     ///// Modifiers ////
     ///////////////////
 
-    modifier noZeroAddress(address _address) {
+    modifier revertIfZeroAddress(address _address) {
         if (_address == address(0)) revert Perpetual__InvalidAddress();
         _;
     }
 
-    modifier noZeroValue(uint256 _value) {
+    modifier revertIfZeroValue(uint256 _value) {
         if (_value == 0) revert Perpetual__InvalidValue();
         _;
     }
@@ -88,8 +88,8 @@ contract Perpetual {
 
     function openPosition(uint256 _size, uint256 _collateralAmount, bool _isLong)
         external
-        noZeroValue(_size)
-        noZeroValue(_collateralAmount)
+        revertIfZeroValue(_size)
+        revertIfZeroValue(_collateralAmount)
         validateLiquidity(_size, _isLong)
     {
         uint256 leverage = _size / _collateralAmount;
@@ -114,7 +114,7 @@ contract Perpetual {
         emit PositionOpened(msg.sender, s_positions[msg.sender]);
     }
 
-    function increaseSize(uint256 _additionalSize) external noZeroValue(_additionalSize) {
+    function increaseSize(uint256 _additionalSize) external revertIfZeroValue(_additionalSize) {
         Position storage position = s_positions[msg.sender];
         if (position.size == 0) revert Perpetual__PositionDoesNotExist();
 
@@ -139,7 +139,7 @@ contract Perpetual {
         emit PositionSizeIncreased(msg.sender, position, _additionalSize);
     }
 
-    function increaseCollateral(uint256 _additionalCollateral) external noZeroValue(_additionalCollateral) {
+    function increaseCollateral(uint256 _additionalCollateral) external revertIfZeroValue(_additionalCollateral) {
         Position storage position = s_positions[msg.sender];
 
         if (position.size == 0) revert Perpetual__PositionDoesNotExist();
