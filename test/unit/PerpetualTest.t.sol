@@ -122,6 +122,17 @@ contract PerpetualTest is Test {
         vm.stopPrank();
     }
 
+    function test_increaseSize_reverts_if_position_doesnt_exist()
+        public
+        liquidityDeposited
+        traderApproveCollateralTokenForPerpetualContract
+    {
+        vm.startPrank(TRADER);
+        vm.expectRevert(Perpetual.Perpetual__PositionDoesNotExist.selector);
+        perpetual.increaseSize(1);
+        vm.stopPrank();
+    }
+
     /*//////////////////////////////////////////////////////////////
                              VAULT CONTRACT
     //////////////////////////////////////////////////////////////*/
