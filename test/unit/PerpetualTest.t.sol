@@ -110,6 +110,18 @@ contract PerpetualTest is Test {
         vm.stopPrank();
     }
 
+    function test_increaseSize_reverts_if_liquidity_is_insufficient()
+        public
+        liquidityDeposited
+        traderApproveCollateralTokenForPerpetualContract
+    {
+        vm.startPrank(TRADER);
+        perpetual.openPosition(1, ONE_THOUSAND_USDC, true);
+        vm.expectRevert(Perpetual.Perpetual__InsufficientLiquidity.selector);
+        perpetual.increaseSize(ONE_THOUSAND_USDC);
+        vm.stopPrank();
+    }
+
     /*//////////////////////////////////////////////////////////////
                              VAULT CONTRACT
     //////////////////////////////////////////////////////////////*/

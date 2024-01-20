@@ -6,6 +6,7 @@ import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/interfaces/Ag
 import {IVault} from "./interfaces/IVault.sol";
 import {Vault} from "./Vault.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {console} from "forge-std/Test.sol";
 
 contract Perpetual {
     error Perpetual__InvalidAddress();
@@ -176,14 +177,19 @@ contract Perpetual {
     }
 
     function validateLiquidityReserve(uint256 _size, bool _isLong) private returns (bool) {
-        uint256 sizeInUsd = _size * getLatestPrice() / PRECISION;
+        uint256 latestPrice = getLatestPrice();
+        uint256 sizeInUsd = _size * latestPrice / PRECISION;
         uint256 totalLiquidity = i_vault.totalAssets();
         uint256 maxLiquidityUsage = (totalLiquidity * MAX_UTILISATION_PERCENT) / BASIS_POINT_DIVISOR;
 
         if (_isLong) {
-            return (s_openInterestShortUsd + (s_openInterestLongUsd + sizeInUsd)) < maxLiquidityUsage;
+            bool isLiquiditySufficient =
+                (s_openInterestShortUsd + (s_openInterestLongUsd + sizeInUsd)) < maxLiquidityUsage;
+            return isLiquiditySufficient;
         } else {
-            return (s_openInterestLongUsd + (s_openInterestShortToken + _size) * getLatestPrice()) < maxLiquidityUsage;
+            bool isLiquiditySufficient =
+                (s_openInterestLongUsd + (s_openInterestShortToken + _size) * latestPrice) < maxLiquidityUsage;
+            return isLiquiditySufficient;
         }
     }
 
@@ -197,17 +203,24 @@ contract Perpetual {
     }
 
     function getTotalPnL() public view returns (int256) {
-        return getTotalLongPnL() + getTotalShortPnL();
+        int256 totalLongPnL = getTotalLongPnL();
+        int256 totalShortPnL = getTotalShortPnL();
+
+        return totalLongPnL + totalShortPnL;
     }
 
     function getTotalLongPnL() public view returns (int256) {
         uint256 longValue = (s_openInterestLongToken * getLatestPrice()) / PRECISION;
-        return int256(longValue - s_openInterestLongUsd);
+        int256 pnl = int256(longValue - s_openInterestLongUsd);
+
+        return pnl;
     }
 
     function getTotalShortPnL() public view returns (int256) {
-        uint256 shortValue = (s_openInterestLongToken * getLatestPrice()) / PRECISION;
-        return int256(s_openInterestShortUsd - shortValue);
+        uint256 shortValue = (s_openInterestShortToken * getLatestPrice()) / PRECISION;
+        int256 pnl = int256(s_openInterestShortUsd - shortValue);
+
+        return pnl;
     }
 
     function getAvailableLiquidity() public returns (uint256) {
