@@ -6,7 +6,6 @@ import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/interfaces/Ag
 import {IVault} from "./interfaces/IVault.sol";
 import {Vault} from "./Vault.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {console} from "forge-std/Test.sol";
 
 contract Perpetual {
     error Perpetual__InvalidAddress();
