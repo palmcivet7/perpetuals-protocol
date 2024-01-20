@@ -23,6 +23,7 @@ contract Perpetual {
 
     uint256 public constant MAX_LEVERAGE = 20;
     uint256 public constant MAX_UTILISATION_PERCENT = 8000;
+    uint256 private constant BASIS_POINT_DIVISOR = 10000;
     uint256 private constant PRECISION = 1e18;
 
     /////////////////////
@@ -177,7 +178,7 @@ contract Perpetual {
     function validateLiquidityReserve(uint256 _size, bool _isLong) private returns (bool) {
         uint256 sizeInUsd = _size * getLatestPrice() / PRECISION;
         uint256 totalLiquidity = i_vault.totalAssets();
-        uint256 maxLiquidityUsage = (totalLiquidity * MAX_UTILISATION_PERCENT) / 10000;
+        uint256 maxLiquidityUsage = (totalLiquidity * MAX_UTILISATION_PERCENT) / BASIS_POINT_DIVISOR;
 
         if (_isLong) {
             return (s_openInterestShortUsd + (s_openInterestLongUsd + sizeInUsd)) < maxLiquidityUsage;
