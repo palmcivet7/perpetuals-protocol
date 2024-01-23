@@ -180,10 +180,7 @@ contract Perpetual {
         uint256 totalLiquidity = i_vault.totalAssets();
         uint256 maxLiquidityUsage = (totalLiquidity * MAX_UTILISATION_PERCENT) / BASIS_POINT_DIVISOR;
 
-        bool isLiquiditySufficient =
-            (s_openInterestShortUsd) + (s_openInterestLongToken * sizeInUsd) < maxLiquidityUsage;
-
-        return isLiquiditySufficient;
+        return (s_openInterestShortUsd) + (s_openInterestLongToken * sizeInUsd) < maxLiquidityUsage;
     }
 
     /////////////////////
