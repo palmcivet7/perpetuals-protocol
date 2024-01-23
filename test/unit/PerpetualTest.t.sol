@@ -21,6 +21,7 @@ contract PerpetualTest is Test {
     address public TRADER = makeAddr("TRADER");
     uint256 public constant STARTING_USER_BALANCE = 1000 ether;
     uint256 public constant ONE_THOUSAND_USDC = 1000_000000;
+    uint256 public constant TWO_THOUSAND_USDC = 2000_000000;
     uint256 public constant TEN_THOUSAND_USDC = 10000_000000;
 
     function setUp() external {
@@ -39,7 +40,7 @@ contract PerpetualTest is Test {
         vm.prank(LIQUIDITY_PROVIDER);
         mockUsdc.mintTokens(TEN_THOUSAND_USDC);
         vm.prank(TRADER);
-        mockUsdc.mintTokens(ONE_THOUSAND_USDC);
+        mockUsdc.mintTokens(TWO_THOUSAND_USDC);
     }
 
     function test_constructor_sets_values() public {
@@ -166,6 +167,20 @@ contract PerpetualTest is Test {
         vm.expectRevert(Perpetual.Perpetual__PositionDoesNotExist.selector);
         perpetual.increaseCollateral(1);
         vm.stopPrank();
+    }
+
+    function test_increaseCollateral_works()
+        public
+        liquidityDeposited
+        traderApproveCollateralTokenForPerpetualContract
+    {
+        vm.startPrank(TRADER);
+        perpetual.openPosition(1, ONE_THOUSAND_USDC, true);
+        (, uint256 startingCollateralAmount,,) = perpetual.getPosition(TRADER);
+        perpetual.increaseCollateral(1);
+        (, uint256 endingCollateralAmount,,) = perpetual.getPosition(TRADER);
+        vm.stopPrank();
+        assertGt(endingCollateralAmount, startingCollateralAmount);
     }
 
     /*//////////////////////////////////////////////////////////////

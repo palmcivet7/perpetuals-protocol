@@ -230,4 +230,13 @@ contract Perpetual {
         }
         return totalLiquidity - lockedLiquidity;
     }
+
+    function getPosition(address _trader)
+        public
+        view
+        returns (uint256 size, uint256 collateralAmount, uint256 openPrice, bool isLong)
+    {
+        Position storage position = s_positions[_trader];
+        return (position.size, position.collateralAmount, position.openPrice, position.isLong);
+    }
 }
