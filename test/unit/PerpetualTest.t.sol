@@ -96,6 +96,16 @@ contract PerpetualTest is Test {
         vm.stopPrank();
     }
 
+    function test_short_openPosition_works()
+        public
+        liquidityDeposited
+        traderApproveCollateralTokenForPerpetualContract
+    {
+        vm.startPrank(TRADER);
+        perpetual.openPosition(1, ONE_THOUSAND_USDC, false);
+        vm.stopPrank();
+    }
+
     /*//////////////////////////////////////////////////////////////
                              INCREASE SIZE
     //////////////////////////////////////////////////////////////*/

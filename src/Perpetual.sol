@@ -6,6 +6,7 @@ import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/interfaces/Ag
 import {IVault} from "./interfaces/IVault.sol";
 import {Vault} from "./Vault.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {console} from "forge-std/Test.sol";
 
 contract Perpetual {
     error Perpetual__InvalidAddress();
@@ -77,8 +78,8 @@ contract Perpetual {
         _;
     }
 
-    modifier validateLiquidity(uint256 _size, bool _isLong) {
-        if (!validateLiquidityReserve(_size, _isLong)) revert Perpetual__InsufficientLiquidity();
+    modifier validateLiquidity(uint256 _size) {
+        if (!validateLiquidityReserve(_size)) revert Perpetual__InsufficientLiquidity();
         _;
     }
 
@@ -90,7 +91,7 @@ contract Perpetual {
         external
         revertIfZeroValue(_size)
         revertIfZeroValue(_collateralAmount)
-        validateLiquidity(_size, _isLong)
+        validateLiquidity(_size)
     {
         uint256 leverage = _size / _collateralAmount;
         if (leverage > MAX_LEVERAGE) revert Perpetual__MaxLeverageExceeded();
@@ -118,9 +119,7 @@ contract Perpetual {
         Position storage position = s_positions[msg.sender];
         if (position.size == 0) revert Perpetual__PositionDoesNotExist();
 
-        if (!validateLiquidityReserve(_additionalSize, position.isLong)) {
-            revert Perpetual__InsufficientLiquidity();
-        }
+        if (!validateLiquidityReserve(_additionalSize)) revert Perpetual__InsufficientLiquidity();
 
         uint256 newTotalSize = position.size + _additionalSize;
         uint256 leverage = newTotalSize / position.collateralAmount;
@@ -175,21 +174,16 @@ contract Perpetual {
         }
     }
 
-    function validateLiquidityReserve(uint256 _size, bool _isLong) private returns (bool) {
+    function validateLiquidityReserve(uint256 _size) private returns (bool) {
         uint256 latestPrice = getLatestPrice();
         uint256 sizeInUsd = _size * latestPrice / PRECISION;
         uint256 totalLiquidity = i_vault.totalAssets();
         uint256 maxLiquidityUsage = (totalLiquidity * MAX_UTILISATION_PERCENT) / BASIS_POINT_DIVISOR;
 
-        if (_isLong) {
-            bool isLiquiditySufficient =
-                (s_openInterestShortUsd + (s_openInterestLongUsd + sizeInUsd)) < maxLiquidityUsage;
-            return isLiquiditySufficient;
-        } else {
-            bool isLiquiditySufficient =
-                (s_openInterestLongUsd + (s_openInterestShortToken + _size) * latestPrice) < maxLiquidityUsage;
-            return isLiquiditySufficient;
-        }
+        bool isLiquiditySufficient =
+            (s_openInterestShortUsd) + (s_openInterestLongToken * sizeInUsd) < maxLiquidityUsage;
+
+        return isLiquiditySufficient;
     }
 
     /////////////////////
