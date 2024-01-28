@@ -154,26 +154,6 @@ contract Perpetual {
     ////// Utility //////
     ////////////////////
 
-    function calculatePnL(uint256 _openPrice, uint256 _size, bool _isLong) public view returns (int256) {
-        uint256 currentMarketValue = getLatestPrice();
-
-        uint256 normalizedSize = _size / PRECISION;
-
-        if (_isLong) {
-            if (currentMarketValue > _openPrice) {
-                return int256(currentMarketValue - _openPrice) * int256(normalizedSize);
-            } else {
-                return -int256(_openPrice - currentMarketValue) * int256(normalizedSize);
-            }
-        } else {
-            if (_openPrice > currentMarketValue) {
-                return int256(_openPrice - currentMarketValue) * int256(normalizedSize);
-            } else {
-                return -int256(currentMarketValue - _openPrice) * int256(normalizedSize);
-            }
-        }
-    }
-
     function validateLiquidityReserve(uint256 _size) private returns (bool) {
         uint256 latestPrice = getLatestPrice();
         uint256 sizeInUsd = _size * latestPrice / PRECISION;
@@ -223,7 +203,7 @@ contract Perpetual {
     }
 
     function getPosition(address _trader)
-        public
+        external
         view
         returns (uint256 size, uint256 collateralAmount, uint256 openPrice, bool isLong)
     {

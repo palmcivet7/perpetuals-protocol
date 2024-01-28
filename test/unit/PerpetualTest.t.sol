@@ -23,6 +23,7 @@ contract PerpetualTest is Test {
     uint256 public constant ONE_THOUSAND_USDC = 1000_000000;
     uint256 public constant TWO_THOUSAND_USDC = 2000_000000;
     uint256 public constant TEN_THOUSAND_USDC = 10000_000000;
+    uint256 public constant ONE_MILLION_ETHER = 1_000_000 ether;
 
     function setUp() external {
         DeployPerpetual deployer = new DeployPerpetual();
@@ -106,6 +107,17 @@ contract PerpetualTest is Test {
         vm.stopPrank();
     }
 
+    function test_openPosition_reverts_if_max_leverage_exceeded()
+        public
+        liquidityDeposited
+        traderApproveCollateralTokenForPerpetualContract
+    {
+        vm.startPrank(TRADER);
+        vm.expectRevert(Perpetual.Perpetual__MaxLeverageExceeded.selector);
+        perpetual.openPosition(ONE_MILLION_ETHER, ONE_THOUSAND_USDC, false);
+        vm.stopPrank();
+    }
+
     /*//////////////////////////////////////////////////////////////
                              INCREASE SIZE
     //////////////////////////////////////////////////////////////*/
@@ -152,6 +164,29 @@ contract PerpetualTest is Test {
         vm.stopPrank();
     }
 
+    function test_short_increaseSize_works()
+        public
+        liquidityDeposited
+        traderApproveCollateralTokenForPerpetualContract
+    {
+        vm.startPrank(TRADER);
+        perpetual.openPosition(1, ONE_THOUSAND_USDC, false);
+        perpetual.increaseSize(1);
+        vm.stopPrank();
+    }
+
+    function test_increaseSize_reverts_if_max_leverage_exceeded()
+        public
+        liquidityDeposited
+        traderApproveCollateralTokenForPerpetualContract
+    {
+        vm.startPrank(TRADER);
+        perpetual.openPosition(1, ONE_THOUSAND_USDC, false);
+        vm.expectRevert(Perpetual.Perpetual__MaxLeverageExceeded.selector);
+        perpetual.increaseSize(ONE_MILLION_ETHER);
+        vm.stopPrank();
+    }
+
     /*//////////////////////////////////////////////////////////////
                           INCREASE COLLATERAL
     //////////////////////////////////////////////////////////////*/
@@ -191,6 +226,17 @@ contract PerpetualTest is Test {
         (, uint256 endingCollateralAmount,,) = perpetual.getPosition(TRADER);
         vm.stopPrank();
         assertGt(endingCollateralAmount, startingCollateralAmount);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                                 GETTER
+    //////////////////////////////////////////////////////////////*/
+
+    function test_getLatestPrice_works() public {
+        vm.startPrank(TRADER);
+        uint256 returnedPrice = perpetual.getLatestPrice();
+        assertEq(returnedPrice, 2000 * 1e18);
+        vm.stopPrank();
     }
 
     /*//////////////////////////////////////////////////////////////
