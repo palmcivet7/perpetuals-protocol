@@ -93,11 +93,7 @@ contract Positions is IPositions, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
-    constructor(address _priceFeed, address _usdc, address _vault)
-        revertIfZeroAddress(_priceFeed)
-        revertIfZeroAddress(_usdc)
-        revertIfZeroAddress(_vault)
-    {
+    constructor(address _priceFeed, address _usdc) revertIfZeroAddress(_priceFeed) revertIfZeroAddress(_usdc) {
         i_priceFeed = AggregatorV3Interface(_priceFeed);
         i_usdc = IERC20(_usdc);
         i_vault = IVault(new Vault(address(this), _usdc));
@@ -235,5 +231,9 @@ contract Positions is IPositions, ReentrancyGuard {
             maxUtilizationLiquidity > totalOpenInterestScaled ? maxUtilizationLiquidity - totalOpenInterestScaled : 0;
 
         return availableLiquidity;
+    }
+
+    function getVault() external view returns (IVault) {
+        return i_vault;
     }
 }
