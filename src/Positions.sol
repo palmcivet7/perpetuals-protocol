@@ -19,6 +19,7 @@ contract Positions is IPositions, ReentrancyGuard {
     //////////////////////////////////////////////////////////////*/
     error Positions__NoZeroAddress();
     error Positions__NoZeroAmount();
+    error Positions__MaxLeverageExceeded();
 
     /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
@@ -26,6 +27,8 @@ contract Positions is IPositions, ReentrancyGuard {
     uint256 internal constant PRICE_FEED_PRECISION = 10 ** 8; // 1e8
     uint256 internal constant WAD_PRECISION = 10 ** 18; // 1e18
     uint256 internal constant SCALING_FACTOR = WAD_PRECISION / PRICE_FEED_PRECISION;
+    /// @dev The size of a position can be 20x the collateral, but exceeding this results in liquidation
+    uint256 internal constant MAX_LEVERAGE = 20;
 
     /// @dev Chainlink PriceFeed for the token being speculated on
     AggregatorV3Interface internal immutable i_priceFeed;
@@ -97,6 +100,10 @@ contract Positions is IPositions, ReentrancyGuard {
         s_position[positionId] =
             Position(msg.sender, _sizeInTokenAmount, sizeInUsd, _collateralAmount, currentPrice, _isLong);
 
+        // update collateral
+        // increase open interest
+        // revert if max leverage exceeded
+
         emit PositionOpened();
 
         // transfer usdc from trader to vault
@@ -109,6 +116,11 @@ contract Positions is IPositions, ReentrancyGuard {
     function decreaseSize() external {}
 
     function decreaseCollateral() external {}
+
+    /*//////////////////////////////////////////////////////////////
+                           INTERNAL FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+    function _isMaxLeverageExceeded(uint256 _positionId) internal returns (bool) {}
 
     /*//////////////////////////////////////////////////////////////
                                  GETTER
