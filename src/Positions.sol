@@ -23,6 +23,10 @@ contract Positions is IPositions, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
+    uint256 internal constant PRICE_FEED_PRECISION = 10 ** 8; // 1e8
+    uint256 internal constant WAD_PRECISION = 10 ** 18; // 1e18
+    uint256 internal constant SCALING_FACTOR = WAD_PRECISION / PRICE_FEED_PRECISION;
+
     /// @dev Chainlink PriceFeed for the token being speculated on
     AggregatorV3Interface internal immutable i_priceFeed;
     /// @dev USDC is the token used for liquidity and collateral
@@ -70,7 +74,9 @@ contract Positions is IPositions, ReentrancyGuard {
         revertIfZeroAmount(_sizeInTokenAmount)
         revertIfZeroAmount(_collateralAmount)
         nonReentrant
-    {}
+    {
+        uint256 currentPrice = getLatestPrice();
+    }
 
     function increaseSize() external {}
 
@@ -83,5 +89,8 @@ contract Positions is IPositions, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                                  GETTER
     //////////////////////////////////////////////////////////////*/
-    function getLatestPrice() external view returns (uint256) {}
+    function getLatestPrice() public view returns (uint256) {
+        (, int256 price,,,) = i_priceFeed.latestRoundData();
+        return uint256(price) * SCALING_FACTOR;
+    }
 }
