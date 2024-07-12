@@ -2,4 +2,6 @@
 
 pragma solidity 0.8.24;
 
-interface IPositions {}
+interface IPositions {
+    function getAvailableLiquidity() external view returns (uint256);
+}
