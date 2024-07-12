@@ -132,4 +132,26 @@ contract PositionsTest is Test {
 
         vm.stopPrank();
     }
+
+    /*//////////////////////////////////////////////////////////////
+                          INCREASE COLLATERAL
+    //////////////////////////////////////////////////////////////*/
+    function test_increaseCollateral() public {
+        uint256 sizeInTokenAmount = 0.5 ether;
+        usdc.mint(trader, FIFTY_USDC);
+
+        vm.startPrank(trader);
+        usdc.approve(address(positions), FIFTY_USDC * 2);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+
+        (,,, uint256 collateralAmount,,) = positions.getPositionData(1);
+
+        assertEq(collateralAmount, FIFTY_USDC);
+
+        positions.increaseCollateral(1, FIFTY_USDC);
+        vm.stopPrank();
+
+        (,,, uint256 collateralAmountAfter,,) = positions.getPositionData(1);
+        assertEq(collateralAmountAfter, FIFTY_USDC * 2);
+    }
 }

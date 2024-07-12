@@ -81,6 +81,7 @@ contract Positions is IPositions, ReentrancyGuard {
     event PositionSizeIncreased(
         uint256 indexed positionId, uint256 indexed newSizeInToken, uint256 indexed newSizeInUsd
     );
+    event PositionCollateralIncreased(uint256 indexed positionId, uint256 indexed newCollateralAmount);
 
     /*//////////////////////////////////////////////////////////////
                                MODIFIERS
@@ -168,7 +169,27 @@ contract Positions is IPositions, ReentrancyGuard {
         );
     }
 
-    function increaseCollateral() external {}
+    /// @dev Anyone can currently call this function on behalf of other users' positions to increase the collateral
+    function increaseCollateral(uint256 _positionId, uint256 _collateralAmountToIncrease)
+        external
+        revertIfPositionInvalid(_positionId)
+        revertIfZeroAmount(_collateralAmountToIncrease)
+        nonReentrant
+    {
+        Position memory position = s_position[_positionId];
+
+        s_position[_positionId].collateralAmount += _collateralAmountToIncrease;
+        s_totalCollateral += _collateralAmountToIncrease;
+
+        /// @dev Increasing collateral is almost certainly not going to exceed the max leverage
+        /// but we check for added security
+        /// @dev revert if max leverage exceeded
+        if (_isMaxLeverageExceeded(_positionId)) revert Positions__MaxLeverageExceeded();
+
+        emit PositionCollateralIncreased(_positionId, position.collateralAmount + _collateralAmountToIncrease);
+
+        i_usdc.safeTransferFrom(msg.sender, address(i_vault), _collateralAmountToIncrease);
+    }
 
     function decreaseSize() external {}
 
@@ -268,5 +289,21 @@ contract Positions is IPositions, ReentrancyGuard {
 
     function getVault() external view returns (IVault) {
         return i_vault;
+    }
+
+    function getPositionData(uint256 _positionId)
+        external
+        view
+        returns (address, uint256, uint256, uint256, uint256, bool)
+    {
+        Position memory position = s_position[_positionId];
+        return (
+            position.trader,
+            position.sizeInToken,
+            position.sizeInUsd,
+            position.collateralAmount,
+            position.openPrice,
+            position.isLong
+        );
     }
 }
