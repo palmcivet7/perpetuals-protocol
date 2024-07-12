@@ -4,6 +4,7 @@ pragma solidity 0.8.24;
 
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {SignedMath} from "@openzeppelin/contracts/utils/math/SignedMath.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import {IPositions} from "./interfaces/IPositions.sol";
 import {IVault} from "./interfaces/IVault.sol";
@@ -13,6 +14,7 @@ contract Positions is IPositions, ReentrancyGuard {
                                LIBRARIES
     //////////////////////////////////////////////////////////////*/
     using SafeERC20 for IERC20;
+    using SignedMath for int256;
 
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
@@ -122,7 +124,13 @@ contract Positions is IPositions, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                            INTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
-    function _isMaxLeverageExceeded(uint256 _positionId) internal returns (bool) {}
+    function _isMaxLeverageExceeded(uint256 _positionId) internal returns (bool) {
+        Position memory position = s_position[_positionId];
+
+        int256 pnl = getPositionPnl(_positionId);
+
+        uint256 effectiveCollateral = position.collateralAmount;
+    }
 
     /*//////////////////////////////////////////////////////////////
                                  GETTER
