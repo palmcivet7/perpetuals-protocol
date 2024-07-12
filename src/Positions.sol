@@ -53,11 +53,25 @@ contract Positions is IPositions, ReentrancyGuard {
     mapping(uint256 positionId => Position position) internal s_position;
     /// @dev Increments everytime a position is opened
     uint256 internal s_positionsCount;
+    /// @dev Total deposited collateral
+    uint256 internal s_totalCollateral;
+    uint256 internal s_totalOpenInterestLongInToken;
+    uint256 internal s_totalOpenInterestLongInUsd; // scaled to 1e18, not scaled to usdc
+    uint256 internal s_totalOpenInterestShortInToken;
+    uint256 internal s_totalOpenInterestShortInUsd; // scaled to 1e18, not scaled to usdc
 
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
-    event PositionOpened();
+    event PositionOpened(
+        uint256 indexed positionId,
+        address trader,
+        uint256 indexed sizeInToken,
+        uint256 sizeInUsd,
+        uint256 collateralAmount,
+        uint256 indexed openPrice,
+        bool isLong
+    );
 
     /*//////////////////////////////////////////////////////////////
                                MODIFIERS
@@ -103,15 +117,20 @@ contract Positions is IPositions, ReentrancyGuard {
         s_position[positionId] =
             Position(msg.sender, _sizeInTokenAmount, sizeInUsd, _collateralAmount, currentPrice, _isLong);
 
-        // update collateral
-        // increase open interest
+        s_totalCollateral += _collateralAmount;
+
+        /// @dev increase open interest
+        _increaseTotalOpenInterest(_sizeInTokenAmount, sizeInUsd, _isLong);
 
         /// @dev revert if max leverage exceeded
         if (_isMaxLeverageExceeded(positionId)) revert Positions__MaxLeverageExceeded();
 
-        emit PositionOpened();
+        emit PositionOpened(
+            positionId, msg.sender, _sizeInTokenAmount, sizeInUsd, _collateralAmount, currentPrice, _isLong
+        );
 
-        // transfer usdc from trader to vault
+        /// @dev transfer usdc from trader to vault
+        i_usdc.safeTransferFrom(msg.sender, address(i_vault), _collateralAmount);
     }
 
     function increaseSize() external {}
@@ -148,6 +167,16 @@ contract Positions is IPositions, ReentrancyGuard {
         uint256 effectiveCollateralByLeverage = effectiveCollateral * MAX_LEVERAGE;
 
         return (effectiveCollateralByLeverage < sizeInUsdScaled);
+    }
+
+    function _increaseTotalOpenInterest(uint256 _sizeInToken, uint256 _sizeInUsd, bool _isLong) internal {
+        if (_isLong) {
+            s_totalOpenInterestLongInToken += _sizeInToken;
+            s_totalOpenInterestLongInUsd += _sizeInUsd;
+        } else {
+            s_totalOpenInterestShortInToken += _sizeInToken;
+            s_totalOpenInterestShortInUsd += _sizeInUsd;
+        }
     }
 
     function _scaleToUSDC(uint256 _amount) internal pure returns (uint256) {
