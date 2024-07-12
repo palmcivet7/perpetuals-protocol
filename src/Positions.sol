@@ -7,7 +7,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {SignedMath} from "@openzeppelin/contracts/utils/math/SignedMath.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import {IPositions} from "./interfaces/IPositions.sol";
-import {IVault} from "./interfaces/IVault.sol";
+import {IVault, Vault} from "./Vault.sol";
 
 contract Positions is IPositions, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
@@ -96,7 +96,7 @@ contract Positions is IPositions, ReentrancyGuard {
     {
         i_priceFeed = AggregatorV3Interface(_priceFeed);
         i_usdc = IERC20(_usdc);
-        i_vault = IVault(_vault);
+        i_vault = IVault(new Vault(address(this), _usdc));
     }
 
     /*//////////////////////////////////////////////////////////////
