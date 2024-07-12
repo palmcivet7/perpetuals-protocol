@@ -43,6 +43,8 @@ contract Positions is IPositions, ReentrancyGuard {
 
     /// @dev Maps position ID to a position
     mapping(uint256 positionId => Position position) internal s_position;
+    /// @dev Increments everytime a position is opened
+    uint256 internal s_positionsCount;
 
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
@@ -81,6 +83,12 @@ contract Positions is IPositions, ReentrancyGuard {
         nonReentrant
     {
         uint256 currentPrice = getLatestPrice();
+        uint256 sizeInUsd = (_sizeInTokenAmount * currentPrice) / WAD_PRECISION;
+
+        s_positionsCount++;
+        uint256 positionId = s_positionsCount;
+        s_position[positionId] =
+            Position(msg.sender, _sizeInTokenAmount, sizeInUsd, _collateralAmount, currentPrice, _isLong);
 
         emit PositionOpened();
     }
