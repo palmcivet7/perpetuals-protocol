@@ -22,6 +22,8 @@ contract Positions is IPositions, ReentrancyGuard {
     error Positions__NoZeroAddress();
     error Positions__NoZeroAmount();
     error Positions__MaxLeverageExceeded();
+    error Positions__OnlyTrader();
+    error Positions__InvalidPosition();
 
     /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
@@ -76,6 +78,9 @@ contract Positions is IPositions, ReentrancyGuard {
         uint256 indexed openPrice,
         bool isLong
     );
+    event PositionSizeIncreased(
+        uint256 indexed positionId, uint256 indexed newSizeInToken, uint256 indexed newSizeInUsd
+    );
 
     /*//////////////////////////////////////////////////////////////
                                MODIFIERS
@@ -87,6 +92,13 @@ contract Positions is IPositions, ReentrancyGuard {
 
     modifier revertIfZeroAmount(uint256 _amount) {
         if (_amount == 0) revert Positions__NoZeroAmount();
+        _;
+    }
+
+    /// @dev If the sizeInToken of a position is 0, it isn't an open position and therefore invalid
+    modifier revertIfPositionInvalid(uint256 _positionId) {
+        Position memory position = s_position[_positionId];
+        if (position.sizeInToken == 0) revert Positions__InvalidPosition();
         _;
     }
 
@@ -133,7 +145,28 @@ contract Positions is IPositions, ReentrancyGuard {
         i_usdc.safeTransferFrom(msg.sender, address(i_vault), _collateralAmount);
     }
 
-    function increaseSize() external {}
+    /// @dev The position trader can call this to increase the size of their position
+    function increaseSize(uint256 _positionId, uint256 _sizeInTokenAmountToIncrease)
+        external
+        revertIfPositionInvalid(_positionId)
+        revertIfZeroAmount(_sizeInTokenAmountToIncrease)
+        nonReentrant
+    {
+        Position memory position = s_position[_positionId];
+        if (msg.sender != position.trader) revert Positions__OnlyTrader();
+
+        uint256 sizeInUsd = (_sizeInTokenAmountToIncrease * getLatestPrice()) / WAD_PRECISION;
+
+        s_position[_positionId].sizeInToken += _sizeInTokenAmountToIncrease;
+        _increaseTotalOpenInterest(_sizeInTokenAmountToIncrease, sizeInUsd, position.isLong);
+
+        /// @dev revert if max leverage exceeded
+        if (_isMaxLeverageExceeded(_positionId)) revert Positions__MaxLeverageExceeded();
+
+        emit PositionSizeIncreased(
+            _positionId, position.sizeInToken + _sizeInTokenAmountToIncrease, position.sizeInUsd + sizeInUsd
+        );
+    }
 
     function increaseCollateral() external {}
 
