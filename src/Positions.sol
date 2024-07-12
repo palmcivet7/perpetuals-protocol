@@ -6,6 +6,7 @@ import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeE
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import {IPositions} from "./interfaces/IPositions.sol";
+import {IVault} from "./interfaces/IVault.sol";
 
 contract Positions is IPositions, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
@@ -16,7 +17,6 @@ contract Positions is IPositions, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
-
     error Positions__NoZeroAddress();
     error Positions__NoZeroAmount();
 
@@ -31,6 +31,8 @@ contract Positions is IPositions, ReentrancyGuard {
     AggregatorV3Interface internal immutable i_priceFeed;
     /// @dev USDC is the token used for liquidity and collateral
     IERC20 internal immutable i_usdc;
+    /// @dev The system's native Vault
+    IVault internal immutable i_vault;
 
     struct Position {
         address trader;
@@ -67,9 +69,14 @@ contract Positions is IPositions, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
-    constructor(address _priceFeed, address _usdc) revertIfZeroAddress(_priceFeed) revertIfZeroAddress(_usdc) {
+    constructor(address _priceFeed, address _usdc, address _vault)
+        revertIfZeroAddress(_priceFeed)
+        revertIfZeroAddress(_usdc)
+        revertIfZeroAddress(_vault)
+    {
         i_priceFeed = AggregatorV3Interface(_priceFeed);
         i_usdc = IERC20(_usdc);
+        i_vault = IVault(_vault);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -91,6 +98,8 @@ contract Positions is IPositions, ReentrancyGuard {
             Position(msg.sender, _sizeInTokenAmount, sizeInUsd, _collateralAmount, currentPrice, _isLong);
 
         emit PositionOpened();
+
+        // transfer usdc from trader to vault
     }
 
     function increaseSize() external {}
