@@ -10,13 +10,17 @@ contract Positions is IPositions {
     /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
+    /// @dev Chainlink PriceFeed for the token being speculated on
     AggregatorV3Interface internal immutable i_priceFeed;
+    /// @dev USDC is the token used for liquidity and collateral
+    IERC20 internal immutable i_usdc;
 
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
-    constructor(address _priceFeed) {
+    constructor(address _priceFeed, address _usdc) {
         i_priceFeed = AggregatorV3Interface(_priceFeed);
+        i_usdc = IERC20(_usdc);
     }
 
     /*//////////////////////////////////////////////////////////////
