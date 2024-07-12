@@ -29,6 +29,7 @@ contract Positions is IPositions, ReentrancyGuard {
     uint256 internal constant PRICE_FEED_PRECISION = 10 ** 8; // 1e8
     uint256 internal constant WAD_PRECISION = 10 ** 18; // 1e18
     uint256 internal constant SCALING_FACTOR = WAD_PRECISION / PRICE_FEED_PRECISION;
+    uint256 internal constant USDC_PRECISION = 10 ** 6; // 1e6
     /// @dev The size of a position can be 20x the collateral, but exceeding this results in liquidation
     uint256 internal constant MAX_LEVERAGE = 20;
 
@@ -130,6 +131,27 @@ contract Positions is IPositions, ReentrancyGuard {
         int256 pnl = getPositionPnl(_positionId);
 
         uint256 effectiveCollateral = position.collateralAmount;
+        if (pnl >= 0) {
+            effectiveCollateral += uint256(pnl);
+        } else {
+            if (pnl.abs() > effectiveCollateral) {
+                effectiveCollateral = 0;
+            } else {
+                effectiveCollateral -= pnl.abs();
+            }
+        }
+        if (effectiveCollateral == 0) return true;
+
+        uint256 currentPrice = getLatestPrice();
+        uint256 sizeInUsd = (position.sizeInToken * currentPrice) / PRECISION;
+        uint256 sizeInUsdScaled = _scaleToUSDC(sizeInUsd);
+        uint256 effectiveCollateralByLeverage = effectiveCollateral * MAX_LEVERAGE;
+
+        return (effectiveCollateralByLeverage < sizeInUsdScaled);
+    }
+
+    function _scaleToUSDC(uint256 _amount) internal pure returns (uint256) {
+        return _amount / (WAD_PRECISION / USDC_PRECISION);
     }
 
     /*//////////////////////////////////////////////////////////////
