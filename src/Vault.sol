@@ -12,6 +12,8 @@ contract Vault is IVault, ERC4626 {
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
     error Vault__InsufficientLiquidity();
+    error Vault__PublicMintDisabled();
+    error Vault__PublicRedeemDisabled();
 
     /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
@@ -38,5 +40,17 @@ contract Vault is IVault, ERC4626 {
     /// @notice Override totalAssets function to match the visibility and mutability of the base function
     function totalAssets() public view override(ERC4626, IVault) returns (uint256) {
         return super.totalAssets();
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                           DISABLED FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+    /// @dev mint and redeem are disabled as we only want users interacting with the vault to deposit and withdraw
+    function mint(uint256, address) public pure override returns (uint256) {
+        revert Vault__PublicMintDisabled();
+    }
+
+    function redeem(uint256, address, address) public pure override returns (uint256) {
+        revert Vault__PublicRedeemDisabled();
     }
 }
