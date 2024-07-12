@@ -30,11 +30,23 @@ contract Vault is IVault, ERC4626 {
     /*//////////////////////////////////////////////////////////////
                            ERC4626 FUNCTIONS
     //////////////////////////////////////////////////////////////*/
-    function withdraw(uint256 assets, address receiver, address owner) public override(ERC4626) returns (uint256) {
-        uint256 availableLiquidity = i_perpetual.getAvailableLiquidity();
+    function withdraw(uint256 assets, address receiver, address owner)
+        public
+        override(ERC4626, IVault)
+        returns (uint256)
+    {
+        uint256 availableLiquidity = i_positions.getAvailableLiquidity();
         if (assets > availableLiquidity) revert Vault__InsufficientLiquidity();
 
         return super.withdraw(assets, receiver, owner);
+    }
+
+    /// @notice Override maxWithdraw function to consider available liquidity
+    function maxWithdraw(address owner) public view override(ERC4626, IVault) returns (uint256) {
+        uint256 availableLiquidity = i_positions.getAvailableLiquidity();
+        uint256 maxAssets = super.maxWithdraw(owner);
+
+        return availableLiquidity < maxAssets ? availableLiquidity : maxAssets;
     }
 
     /// @notice Override totalAssets function to match the visibility and mutability of the base function
