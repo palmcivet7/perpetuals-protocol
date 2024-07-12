@@ -131,4 +131,8 @@ contract Positions is IPositions, ReentrancyGuard {
         (, int256 price,,,) = i_priceFeed.latestRoundData();
         return uint256(price) * SCALING_FACTOR;
     }
+
+    function getPositionPnl(uint256 _positionId) public view returns (int256) {}
+
+    function getAvailableLiquidity() public view returns (uint256) {}
 }
