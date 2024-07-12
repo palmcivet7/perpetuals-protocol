@@ -3,10 +3,11 @@
 pragma solidity 0.8.24;
 
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import {IPositions} from "./interfaces/IPositions.sol";
 
-contract Positions is IPositions {
+contract Positions is IPositions, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                                LIBRARIES
     //////////////////////////////////////////////////////////////*/
@@ -63,7 +64,13 @@ contract Positions is IPositions {
     /*//////////////////////////////////////////////////////////////
                            EXTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
-    function openPosition() external {}
+    /// @dev Allows a trader to open a position
+    function openPosition(uint256 _sizeInTokenAmount, uint256 _collateralAmount, bool _isLong)
+        external
+        revertIfZeroAmount(_sizeInTokenAmount)
+        revertIfZeroAmount(_collateralAmount)
+        nonReentrant
+    {}
 
     function increaseSize() external {}
 
