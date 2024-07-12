@@ -8,6 +8,11 @@ import {IPositions} from "./interfaces/IPositions.sol";
 
 contract Positions is IPositions {
     /*//////////////////////////////////////////////////////////////
+                                 ERRORS
+    //////////////////////////////////////////////////////////////*/
+    error Positions__NoZeroAddress();
+
+    /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
     /// @dev Chainlink PriceFeed for the token being speculated on
@@ -28,9 +33,17 @@ contract Positions is IPositions {
     mapping(uint256 positionId => Position position) internal s_position;
 
     /*//////////////////////////////////////////////////////////////
+                               MODIFIERS
+    //////////////////////////////////////////////////////////////*/
+    modifier revertIfZeroAddress(address _address) {
+        if (_address == address(0)) revert Positions__NoZeroAddress();
+        _;
+    }
+
+    /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
-    constructor(address _priceFeed, address _usdc) {
+    constructor(address _priceFeed, address _usdc) revertIfZeroAddress(_priceFeed) revertIfZeroAddress(_usdc) {
         i_priceFeed = AggregatorV3Interface(_priceFeed);
         i_usdc = IERC20(_usdc);
     }
