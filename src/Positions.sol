@@ -102,7 +102,9 @@ contract Positions is IPositions, ReentrancyGuard {
 
         // update collateral
         // increase open interest
-        // revert if max leverage exceeded
+
+        /// @dev revert if max leverage exceeded
+        if (_isMaxLeverageExceeded(positionId)) revert Positions__MaxLeverageExceeded();
 
         emit PositionOpened();
 
