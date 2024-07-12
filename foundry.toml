@@ -6,6 +6,9 @@ remappings = [
     "@chainlink/contracts=lib/chainlink/contracts",
     "@openzeppelin/contracts=lib/openzeppelin-contracts/contracts",
     "@chainlink/contracts-ccip=lib/ccip/contracts",
+    "@worldcoin/contracts=lib/world-id-contracts",
+    "@pythnetwork/pyth-sdk-solidity=lib/pyth-sdk-solidity",
+    "@chainlink-local/=lib/chainlink-local/",
 ]
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
