@@ -15,6 +15,18 @@ contract Positions is IPositions {
     /// @dev USDC is the token used for liquidity and collateral
     IERC20 internal immutable i_usdc;
 
+    struct Position {
+        address trader;
+        uint256 sizeInToken;
+        uint256 sizeInUsd;
+        uint256 collateralAmount;
+        uint256 openPrice;
+        bool isLong;
+    }
+
+    /// @dev Maps position ID to a position
+    mapping(uint256 positionId => Position position) internal s_position;
+
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
