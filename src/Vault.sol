@@ -34,4 +34,9 @@ contract Vault is IVault, ERC4626 {
 
         return super.withdraw(assets, receiver, owner);
     }
+
+    /// @notice Override totalAssets function to match the visibility and mutability of the base function
+    function totalAssets() public view override(ERC4626, IVault) returns (uint256) {
+        return super.totalAssets();
+    }
 }

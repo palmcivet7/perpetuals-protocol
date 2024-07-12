@@ -32,6 +32,9 @@ contract Positions is IPositions, ReentrancyGuard {
     uint256 internal constant USDC_PRECISION = 10 ** 6; // 1e6
     /// @dev The size of a position can be 20x the collateral, but exceeding this results in liquidation
     uint256 internal constant MAX_LEVERAGE = 20;
+    /// @dev Traders cannot utilize more than a configured percentage of the deposited liquidity
+    uint256 internal constant MAX_UTILIZATION_PERCENTAGE = 8000;
+    uint256 internal constant BASIS_POINT_DIVISOR = 10000;
 
     /// @dev Chainlink PriceFeed for the token being speculated on
     AggregatorV3Interface internal immutable i_priceFeed;
@@ -193,5 +196,24 @@ contract Positions is IPositions, ReentrancyGuard {
 
     function getPositionPnl(uint256 _positionId) public view returns (int256) {}
 
-    function getAvailableLiquidity() public view returns (uint256) {}
+    /// @dev Returns the available liquidity of the protocol, excluding any collateral or reserved profits
+    function getAvailableLiquidity() public view returns (uint256) {
+        // Total assets in the vault
+        uint256 totalLiquidity = i_vault.totalAssets();
+
+        // Calculate and scale the total open interest
+        uint256 currentPrice = getLatestPrice();
+        uint256 totalOpenInterestLong = (s_totalOpenInterestLongInToken * currentPrice) / WAD_PRECISION;
+        uint256 totalOpenInterest = totalOpenInterestLong + s_totalOpenInterestShortInUsd;
+        uint256 totalOpenInterestScaled = _scaleToUSDC(totalOpenInterest);
+
+        // Calculate max utilization liquidity
+        uint256 maxUtilizationLiquidity = (totalLiquidity * MAX_UTILIZATION_PERCENTAGE) / BASIS_POINT_DIVISOR;
+
+        // Adjust available liquidity based on total open interest
+        uint256 availableLiquidity =
+            maxUtilizationLiquidity > totalOpenInterestScaled ? maxUtilizationLiquidity - totalOpenInterestScaled : 0;
+
+        return availableLiquidity;
+    }
 }
