@@ -45,6 +45,11 @@ contract Positions is IPositions, ReentrancyGuard {
     mapping(uint256 positionId => Position position) internal s_position;
 
     /*//////////////////////////////////////////////////////////////
+                                 EVENTS
+    //////////////////////////////////////////////////////////////*/
+    event PositionOpened();
+
+    /*//////////////////////////////////////////////////////////////
                                MODIFIERS
     //////////////////////////////////////////////////////////////*/
     modifier revertIfZeroAddress(address _address) {
@@ -76,6 +81,8 @@ contract Positions is IPositions, ReentrancyGuard {
         nonReentrant
     {
         uint256 currentPrice = getLatestPrice();
+
+        emit PositionOpened();
     }
 
     function increaseSize() external {}
