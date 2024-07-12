@@ -32,5 +32,20 @@ contract PositionsTest is Test {
         vault = Vault(address(positions.getVault()));
     }
 
-    function test_constructor() public {}
+    modifier liquidityDeposited() {
+        vm.startPrank(liquidityProvider);
+        usdc.approve(address(vault), FIFTY_USDC);
+        vault.deposit(FIFTY_USDC, liquidityProvider);
+        vm.stopPrank();
+        _;
+    }
+
+    function test_openPosition() public liquidityDeposited {
+        uint256 sizeInTokenAmount = 0.5 ether; // half an index token
+
+        vm.startPrank(trader);
+        usdc.approve(address(positions), FIFTY_USDC);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+        vm.stopPrank();
+    }
 }

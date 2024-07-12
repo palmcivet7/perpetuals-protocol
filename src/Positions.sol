@@ -144,7 +144,7 @@ contract Positions is IPositions, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                            INTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
-    function _isMaxLeverageExceeded(uint256 _positionId) internal returns (bool) {
+    function _isMaxLeverageExceeded(uint256 _positionId) internal view returns (bool) {
         Position memory position = s_position[_positionId];
 
         int256 pnl = getPositionPnl(_positionId);
