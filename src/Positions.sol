@@ -11,6 +11,7 @@ contract Positions is IPositions {
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
     error Positions__NoZeroAddress();
+    error Positions__NoZeroAmount();
 
     /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
@@ -37,6 +38,11 @@ contract Positions is IPositions {
     //////////////////////////////////////////////////////////////*/
     modifier revertIfZeroAddress(address _address) {
         if (_address == address(0)) revert Positions__NoZeroAddress();
+        _;
+    }
+
+    modifier revertIfZeroAmount(uint256 _amount) {
+        if (_amount == 0) revert Positions__NoZeroAmount();
         _;
     }
 
