@@ -35,6 +35,7 @@ contract Positions is IPositions, ReentrancyGuard {
     /// @dev Traders cannot utilize more than a configured percentage of the deposited liquidity
     uint256 internal constant MAX_UTILIZATION_PERCENTAGE = 8000;
     uint256 internal constant BASIS_POINT_DIVISOR = 10000;
+    int256 internal constant INT_PRECISION = 10 ** 18;
 
     /// @dev Chainlink PriceFeed for the token being speculated on
     AggregatorV3Interface internal immutable i_priceFeed;
@@ -165,7 +166,7 @@ contract Positions is IPositions, ReentrancyGuard {
         if (effectiveCollateral == 0) return true;
 
         uint256 currentPrice = getLatestPrice();
-        uint256 sizeInUsd = (position.sizeInToken * currentPrice) / PRECISION;
+        uint256 sizeInUsd = (position.sizeInToken * currentPrice) / WAD_PRECISION;
         uint256 sizeInUsdScaled = _scaleToUSDC(sizeInUsd);
         uint256 effectiveCollateralByLeverage = effectiveCollateral * MAX_LEVERAGE;
 
@@ -189,12 +190,31 @@ contract Positions is IPositions, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                                  GETTER
     //////////////////////////////////////////////////////////////*/
+    /// @dev Returns the latest price for the speculated asset
     function getLatestPrice() public view returns (uint256) {
         (, int256 price,,,) = i_priceFeed.latestRoundData();
         return uint256(price) * SCALING_FACTOR;
     }
 
-    function getPositionPnl(uint256 _positionId) public view returns (int256) {}
+    /// @dev Returns the PnL for a position
+    function getPositionPnl(uint256 _positionId) public view returns (int256) {
+        Position memory position = s_position[_positionId];
+        if (position.sizeInToken == 0) return 0;
+
+        uint256 currentPrice = getLatestPrice();
+
+        int256 pnl;
+        if (position.isLong) {
+            /// Formula for Long PnL:
+            /// (Current Market Value - Average Position Price) * Size In Tokens
+            pnl = ((int256(currentPrice) - int256(position.openPrice)) * int256(position.sizeInToken)) / INT_PRECISION;
+        } else {
+            /// Formula for Short PnL:
+            /// (Average Position Price - Current Market Value) * Size In Tokens
+            pnl = ((int256(position.openPrice) - int256(currentPrice)) * int256(position.sizeInToken)) / INT_PRECISION;
+        }
+        return pnl;
+    }
 
     /// @dev Returns the available liquidity of the protocol, excluding any collateral or reserved profits
     function getAvailableLiquidity() public view returns (uint256) {
