@@ -50,7 +50,7 @@ contract Vault is IVault, ERC4626 {
         revertIfZeroAddress(_pythFeed)
     {
         i_ccipVaultManager = ICCIPVaultManager(
-            new CCIPVaultManager(_router, _link, _usdc, _priceFeed, address(this), _pythFeed, _pythFeedId)
+            new CCIPVaultManager(_router, _link, _usdc, _priceFeed, address(this), _pythFeed, _pythFeedId, msg.sender)
         );
     }
 

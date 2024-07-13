@@ -96,8 +96,9 @@ contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
         address _priceFeed,
         address _vault,
         address _pythFeed,
-        bytes32 _pythFeedId
-    ) Ownable(msg.sender) CCIPReceiver(_router) {
+        bytes32 _pythFeedId,
+        address _owner
+    ) Ownable(_owner) CCIPReceiver(_router) {
         i_link = LinkTokenInterface(_link);
         i_usdc = IERC20(_usdc);
         i_priceFeed = AggregatorV3Interface(_priceFeed);
