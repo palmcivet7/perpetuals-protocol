@@ -7,10 +7,12 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {SignedMath} from "@openzeppelin/contracts/utils/math/SignedMath.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import {IPyth, PythStructs} from "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
+import {IWorldID} from "@worldcoin/contracts/src/interfaces/IWorldID.sol";
 import {IPositions} from "./interfaces/IPositions.sol";
 import {ICCIPPositionsManager, CCIPPositionsManager} from "./CCIPPositionsManager.sol";
 import {Constants} from "./libraries/Constants.sol";
 import {Utils} from "./libraries/Utils.sol";
+import {BytesHasher} from "./libraries/BytesHasher.sol";
 
 contract Positions is IPositions, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
@@ -19,6 +21,7 @@ contract Positions is IPositions, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using SignedMath for int256;
     using Utils for uint256;
+    using ByteHasher for bytes;
 
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
@@ -32,6 +35,7 @@ contract Positions is IPositions, ReentrancyGuard {
     error Positions__InsufficientLiquidity();
     error Positions__MaxLeverageNotExceeded();
     error Positions__PositionInProfit();
+    error Positions__InvalidNullifier();
 
     /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
@@ -46,7 +50,13 @@ contract Positions is IPositions, ReentrancyGuard {
     IPyth internal immutable i_pythFeed;
     /// @dev Pyth pricefeed ID for the token being speculated on
     bytes32 internal immutable i_pythFeedId;
+    /// @dev The World ID instance that will be used for verifying proofs
+    IWorldID internal immutable i_worldId;
+    /// @dev The contract's external nullifier hash
+    uint256 internal immutable i_externalNullifier;
 
+    /// @dev Whether a nullifier hash has been used already. Used to restrict actions to a single WorldID
+    mapping(uint256 => bool) internal s_nullifierHashes;
     /// @dev Maps position ID to a position
     mapping(uint256 positionId => Position position) internal s_position;
     /// @dev Increments everytime a position is opened
@@ -110,7 +120,10 @@ contract Positions is IPositions, ReentrancyGuard {
         address _usdc,
         address _priceFeed,
         address _pythFeed,
-        bytes32 _pythFeedId
+        bytes32 _pythFeedId,
+        address _worldId,
+        string memory _appId,
+        string memory _actionId
     ) revertIfZeroAddress(_priceFeed) revertIfZeroAddress(_usdc) revertIfZeroAddress(_pythFeed) {
         i_priceFeed = AggregatorV3Interface(_priceFeed);
         i_usdc = IERC20(_usdc);
@@ -118,18 +131,30 @@ contract Positions is IPositions, ReentrancyGuard {
         i_pythFeedId = _pythFeedId;
         i_ccipPositionsManager =
             ICCIPPositionsManager(new CCIPPositionsManager(_router, _link, _usdc, address(this), msg.sender));
+        i_worldId = IWorldID(_worldId);
+        i_externalNullifier = abi.encodePacked(abi.encodePacked(_appId).hashToField(), _actionId).hashToField();
     }
 
     /*//////////////////////////////////////////////////////////////
                            EXTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
     /// @dev Allows a trader to open a position
-    function openPosition(uint256 _sizeInTokenAmount, uint256 _collateralAmount, bool _isLong)
-        external
-        revertIfZeroAmount(_sizeInTokenAmount)
-        revertIfZeroAmount(_collateralAmount)
-        nonReentrant
-    {
+    function openPosition(
+        uint256 _sizeInTokenAmount,
+        uint256 _collateralAmount,
+        bool _isLong,
+        uint256 _root,
+        uint256 _nullifierHash,
+        uint256[8] calldata _proof
+    ) external revertIfZeroAmount(_sizeInTokenAmount) revertIfZeroAmount(_collateralAmount) nonReentrant {
+        // Check and verify the WorldID uniqueness of the caller to mitigate manipulation by bots
+        if (s_nullifierHashes[nullifierHash]) revert Positions__InvalidNullifier();
+        i_worldId.verifyProof(
+            _root, abi.encodePacked(msg.sender).hashToField(), _nullifierHash, i_externalNullifier, _proof
+        );
+        s_nullifierHashes[nullifierHash] = true;
+
+        // Now open a position
         uint256 currentPrice = getLatestPrice();
         uint256 sizeInUsd = (_sizeInTokenAmount * currentPrice) / Constants.WAD_PRECISION;
 
@@ -418,8 +443,8 @@ contract Positions is IPositions, ReentrancyGuard {
         PythStructs.Price memory priceStruct = i_pythFeed.getPriceUnsafe(i_pythFeedId);
 
         // Calculate Pyth price in 18 decimals
-        uint256 pythPrice18Decimals =
-            (uint256(uint64(priceStruct.price)) * Constants.WAD_PRECISION) / (10 ** uint8(uint32(-1 * priceStruct.expo)));
+        uint256 pythPrice18Decimals = (uint256(uint64(priceStruct.price)) * Constants.WAD_PRECISION)
+            / (10 ** uint8(uint32(-1 * priceStruct.expo)));
 
         // Calculate the average price in 18 decimals
         uint256 finalPrice18Decimals = (chainlinkPrice18Decimals + pythPrice18Decimals) / 2;
