@@ -466,4 +466,12 @@ contract Positions is IPositions, ReentrancyGuard {
     function getTotalCollateral() external view returns (uint256) {
         return s_totalCollateral;
     }
+
+    function getPositionsCount() external view returns (uint256) {
+        return s_positionsCount;
+    }
+
+    function getMaxLeverageExceeded(uint256 _positionId) external view returns (bool) {
+        return _isMaxLeverageExceeded(_positionId);
+    }
 }
