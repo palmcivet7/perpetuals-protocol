@@ -9,6 +9,8 @@ remappings = [
     "@worldcoin/contracts=lib/world-id-contracts",
     "@pythnetwork/pyth-sdk-solidity=lib/pyth-sdk-solidity",
     "@chainlink-local/=lib/chainlink-local/",
+    "@uniswap/v4-periphery=lib/v4-periphery/contracts",
+    "@uniswap/v4-core=lib/v4-core/contracts",
 ]
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
