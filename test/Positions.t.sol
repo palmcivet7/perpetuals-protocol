@@ -53,7 +53,9 @@ contract PositionsTest is Test {
     string constant WORLDID_APP_ID = "app_staging_704615d1d9d9dba9a0b556954779d3ae";
     string constant WORLDID_ACTION_ID = "openPosition";
 
-    uint256[8] proof = [
+    uint256 constant WORLDID_ROOT = 0x231c157755ced1799aeb4e74149eaf576b0838c40c70cbb3aa803cb4ee860760;
+    uint256 constant WORLDID_NULLIFIER_HASH = 1;
+    uint256[8] WORLDID_PROOF = [
         0x29cddd130f81c1a0abd4b1077c82e556fe9e6a7d8915baac867dd6392e03fc10,
         0x1fabf9e4a1b45abcb1580565c9d615c8616ad588b1a01ade07a00ff7d965442b,
         0x23ccc263123e8cd76ea7773c6d4eddc2d4f7b4feba213f85dfb56070e42a87b7,
@@ -63,7 +65,6 @@ contract PositionsTest is Test {
         0x249471298db747c1e1e7388bb41e58ec2d541bdd6eee00be3b6ce9f02977df90,
         0x19ce330c2870c52b0855be468f9bc91e8bb6b6c0e26545363b1be467f92eb40e
     ];
-    uint256 constant WORLDID_ROOT = 0x231c157755ced1799aeb4e74149eaf576b0838c40c70cbb3aa803cb4ee860760;
 
     Register.NetworkDetails arbSepNetworkDetails;
     Register.NetworkDetails baseSepNetworkDetails;
@@ -169,7 +170,7 @@ contract PositionsTest is Test {
 
         vm.startPrank(trader);
         baseUsdc.approve(address(positions), FIFTY_USDC);
-        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true, WORLDID_ROOT, WORLDID_NULLIFIER_HASH, WORLDID_PROOF);
         ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
         assertEq(vaultManager.getOpenInterestLongInToken(), sizeInTokenAmount);
         vm.stopPrank();
@@ -181,7 +182,7 @@ contract PositionsTest is Test {
         vm.startPrank(trader);
         baseUsdc.approve(address(positions), FIFTY_USDC);
         vm.expectRevert(Positions.Positions__MaxLeverageExceeded.selector);
-        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true, WORLDID_ROOT, WORLDID_NULLIFIER_HASH, WORLDID_PROOF);
         vm.stopPrank();
     }
 
@@ -199,7 +200,7 @@ contract PositionsTest is Test {
         uint256 sizeInTokenAmount = 0.01 ether;
         vm.startPrank(trader);
         baseUsdc.approve(address(positions), FIFTY_USDC);
-        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true, WORLDID_ROOT, WORLDID_NULLIFIER_HASH, WORLDID_PROOF);
         ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
         vm.stopPrank();
 
@@ -242,7 +243,7 @@ contract PositionsTest is Test {
 
         vm.startPrank(trader);
         baseUsdc.approve(address(positions), FIFTY_USDC);
-        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true, WORLDID_ROOT, WORLDID_NULLIFIER_HASH, WORLDID_PROOF);
         ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
         vm.stopPrank();
 
@@ -258,7 +259,7 @@ contract PositionsTest is Test {
         uint256 sizeInTokenAmount = 0.25 ether;
         vm.startPrank(trader);
         baseUsdc.approve(address(positions), FIFTY_USDC);
-        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true, WORLDID_ROOT, WORLDID_NULLIFIER_HASH, WORLDID_PROOF);
         ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
         vm.stopPrank();
 
@@ -277,7 +278,9 @@ contract PositionsTest is Test {
 
         vm.startPrank(trader);
         baseUsdc.approve(address(positions), FIFTY_USDC);
-        positions.openPosition(sizeInTokenAmount, FIFTY_USDC / 2, true);
+        positions.openPosition(
+            sizeInTokenAmount, FIFTY_USDC / 2, true, WORLDID_ROOT, WORLDID_NULLIFIER_HASH, WORLDID_PROOF
+        );
         ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
         vm.stopPrank();
 
@@ -301,7 +304,7 @@ contract PositionsTest is Test {
 
         vm.startPrank(trader);
         baseUsdc.approve(address(positions), FIFTY_USDC);
-        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true, WORLDID_ROOT, WORLDID_NULLIFIER_HASH, WORLDID_PROOF);
         ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
         vm.stopPrank();
 
@@ -322,7 +325,7 @@ contract PositionsTest is Test {
 
         vm.startPrank(trader);
         baseUsdc.approve(address(positions), FIFTY_USDC);
-        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true, WORLDID_ROOT, WORLDID_NULLIFIER_HASH, WORLDID_PROOF);
         ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
         vm.stopPrank();
 
@@ -351,7 +354,7 @@ contract PositionsTest is Test {
 
         vm.startPrank(trader);
         baseUsdc.approve(address(positions), FIFTY_USDC);
-        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true, WORLDID_ROOT, WORLDID_NULLIFIER_HASH, WORLDID_PROOF);
         ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
         vm.stopPrank();
 
@@ -378,7 +381,7 @@ contract PositionsTest is Test {
 
         vm.startPrank(trader);
         baseUsdc.approve(address(positions), FIFTY_USDC);
-        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true, WORLDID_ROOT, WORLDID_NULLIFIER_HASH, WORLDID_PROOF);
         ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
         vm.stopPrank();
 
@@ -422,7 +425,7 @@ contract PositionsTest is Test {
 
         vm.startPrank(trader);
         baseUsdc.approve(address(positions), FIFTY_USDC);
-        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true, WORLDID_ROOT, WORLDID_NULLIFIER_HASH, WORLDID_PROOF);
         ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
         vm.stopPrank();
 
@@ -456,7 +459,7 @@ contract PositionsTest is Test {
 
         vm.startPrank(trader);
         baseUsdc.approve(address(positions), FIFTY_USDC);
-        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true, WORLDID_ROOT, WORLDID_NULLIFIER_HASH, WORLDID_PROOF);
         ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
         vm.stopPrank();
 
@@ -486,7 +489,7 @@ contract PositionsTest is Test {
 
         vm.startPrank(trader);
         baseUsdc.approve(address(positions), FIFTY_USDC);
-        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true, WORLDID_ROOT, WORLDID_NULLIFIER_HASH, WORLDID_PROOF);
         ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
         vm.stopPrank();
 
@@ -530,7 +533,7 @@ contract PositionsTest is Test {
 
         vm.startPrank(trader);
         baseUsdc.approve(address(positions), FIFTY_USDC);
-        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true, WORLDID_ROOT, WORLDID_NULLIFIER_HASH, WORLDID_PROOF);
         ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
         vm.stopPrank();
 
@@ -545,7 +548,7 @@ contract PositionsTest is Test {
 
         vm.startPrank(trader);
         baseUsdc.approve(address(positions), FIFTY_USDC);
-        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true, WORLDID_ROOT, WORLDID_NULLIFIER_HASH, WORLDID_PROOF);
         ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
         vm.stopPrank();
 

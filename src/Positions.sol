@@ -12,7 +12,7 @@ import {IPositions} from "./interfaces/IPositions.sol";
 import {ICCIPPositionsManager, CCIPPositionsManager} from "./CCIPPositionsManager.sol";
 import {Constants} from "./libraries/Constants.sol";
 import {Utils} from "./libraries/Utils.sol";
-import {BytesHasher} from "./libraries/BytesHasher.sol";
+import {ByteHasher} from "./libraries/ByteHasher.sol";
 
 contract Positions is IPositions, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
@@ -148,11 +148,11 @@ contract Positions is IPositions, ReentrancyGuard {
         uint256[8] calldata _proof
     ) external revertIfZeroAmount(_sizeInTokenAmount) revertIfZeroAmount(_collateralAmount) nonReentrant {
         // Check and verify the WorldID uniqueness of the caller to mitigate manipulation by bots
-        if (s_nullifierHashes[nullifierHash]) revert Positions__InvalidNullifier();
+        if (s_nullifierHashes[_nullifierHash]) revert Positions__InvalidNullifier();
         i_worldId.verifyProof(
             _root, abi.encodePacked(msg.sender).hashToField(), _nullifierHash, i_externalNullifier, _proof
         );
-        s_nullifierHashes[nullifierHash] = true;
+        s_nullifierHashes[_nullifierHash] = true;
 
         // Now open a position
         uint256 currentPrice = getLatestPrice();
