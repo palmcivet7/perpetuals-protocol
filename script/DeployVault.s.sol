@@ -34,5 +34,5 @@ contract DeployVault is Script {
 
 // forge script script/DeployVault.s.sol --rpc-url $ARBITRUM_SEPOLIA_RPC_URL --broadcast --private-key $PRIVATE_KEY
 
-// 0: contract Vault 0xAa829eabEC1ec37033c7eFF60C4527Dcf510E28d
-// 1: contract CCIPVaultManager 0xC72F72Cecf4D00E4Cb7c999215c6EAF4A8e61A30
+// 0: contract Vault 0x88F32280155046f54c24fa0Dd0d176E4e0Ccad7A
+// 1: contract CCIPVaultManager 0x3EBFE1f7D17c8F6B3fC8Dc5424aE9aaECb227EA3

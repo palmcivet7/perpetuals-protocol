@@ -42,6 +42,5 @@ contract DeployPositions is Script {
 
 // forge script script/DeployPositions.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL --broadcast --private-key $PRIVATE_KEY
 
-// forge verify-contract --chain-id 84531 --num-of-optimizations 200 --compiler-version v0.8.24+commit.0d396f2b --etherscan-api-key $BASESCAN_API_KEY 0xAa829eabEC1ec37033c7eFF60C4527Dcf510E28d src/Positions.sol:Positions
-
-// forge verify-contract --chain-id 84531 --num-of-optimizations 200 --compiler-version v0.8.24+commit.0d396f2b --etherscan-api-key $BASESCAN_API_KEY 0xC72F72Cecf4D00E4Cb7c999215c6EAF4A8e61A30 src/Positions.sol:CCIPPositionsManager
+// Positions: 0xAa829eabEC1ec37033c7eFF60C4527Dcf510E28d
+// CCIPPositionsManager: 0xC72F72Cecf4D00E4Cb7c999215c6EAF4A8e61A30
