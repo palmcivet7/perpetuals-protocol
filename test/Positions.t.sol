@@ -485,10 +485,12 @@ contract PositionsTest is Test {
         uint256 sizeInTokenAmount = 0.25 ether;
 
         vm.startPrank(trader);
-        usdc.approve(address(positions), FIFTY_USDC);
+        baseUsdc.approve(address(positions), FIFTY_USDC);
         positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+        ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
         vm.stopPrank();
 
+        vm.selectFork(baseFork);
         vm.prank(liquidator);
         vm.expectRevert(Positions.Positions__MaxLeverageNotExceeded.selector);
         positions.liquidate(1);
@@ -498,11 +500,14 @@ contract PositionsTest is Test {
         uint256 sizeInTokenAmount = 0.5 ether;
 
         vm.startPrank(trader);
-        usdc.approve(address(positions), FIFTY_USDC);
+        baseUsdc.approve(address(positions), FIFTY_USDC);
         positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+        ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
         vm.stopPrank();
 
-        priceFeed.updateAnswer(1950_00000000);
+        arbPriceFeed.updateAnswer(1950_00000000);
+        vm.selectFork(baseFork);
+        basePriceFeed.updateAnswer(1950_00000000);
 
         int256 pnl = positions.getPositionPnl(1);
         (,,, uint256 collateral,,) = positions.getPositionData(1);
@@ -512,12 +517,14 @@ contract PositionsTest is Test {
         uint256 remainingCollateral = collateral - negativePnlScaledToUsdc;
         uint256 expectedReward = (remainingCollateral * 2000) / 10000;
 
-        uint256 liquidatorStartingBalance = usdc.balanceOf(liquidator);
+        uint256 liquidatorStartingBalance = baseUsdc.balanceOf(liquidator);
 
         vm.prank(liquidator);
         positions.liquidate(1);
+        ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
+        ccipLocalSimulatorFork.switchChainAndRouteMessage(baseFork);
 
-        uint256 liquidatorEndingBalance = usdc.balanceOf(liquidator);
+        uint256 liquidatorEndingBalance = baseUsdc.balanceOf(liquidator);
 
         assertGt(liquidatorEndingBalance, liquidatorStartingBalance);
         assertEq(liquidatorEndingBalance, expectedReward);

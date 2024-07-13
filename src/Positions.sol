@@ -322,13 +322,16 @@ contract Positions is IPositions, ReentrancyGuard {
 
         emit PositionLiquidated(_positionId, position.trader, pnl);
 
-        // transfer 20% of any remaining collateral to the liquidator
         if (remainingCollateral > 0) {
             // calculate 20% of position.collateralAmount
             uint256 liquidationReward =
                 (remainingCollateral * Constants.LIQUIDATION_BONUS) / Constants.BASIS_POINT_DIVISOR;
-            i_ccipPositionsManager.approve(liquidationReward);
+            i_ccipPositionsManager.approve(remainingCollateral);
             i_usdc.safeTransferFrom(address(i_ccipPositionsManager), msg.sender, liquidationReward);
+
+            // send the other 80% to vault via ccip
+            uint256 collateralToVault = remainingCollateral - liquidationReward;
+            i_ccipPositionsManager.ccipSend(collateralToVault, 0, address(0), 0, 0, false, false);
         }
     }
 
