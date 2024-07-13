@@ -315,49 +315,67 @@ contract PositionsTest is Test {
         uint256 sizeInTokenAmount = 0.5 ether;
 
         vm.startPrank(trader);
-        usdc.approve(address(positions), FIFTY_USDC);
+        baseUsdc.approve(address(positions), FIFTY_USDC);
         positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
-
-        (, uint256 sizeInTokenStart,,,,) = positions.getPositionData(1);
-        assertEq(sizeInTokenStart, sizeInTokenAmount);
-        uint256 startingBalance = usdc.balanceOf(trader);
-
-        uint256 sizeToDecrease = 0.5 ether;
-        positions.decreaseSize(1, sizeToDecrease);
-
+        ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
         vm.stopPrank();
 
+        vm.selectFork(baseFork);
+        (, uint256 sizeInTokenStart,,,,) = positions.getPositionData(1);
+        assertEq(sizeInTokenStart, sizeInTokenAmount);
+        uint256 startingBalance = baseUsdc.balanceOf(trader);
+
+        uint256 sizeToDecrease = 0.5 ether;
+        vm.prank(trader);
+        positions.decreaseSize(1, sizeToDecrease);
+        ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
+
+        vm.selectFork(baseFork);
         (, uint256 sizeInTokenEnd,,,,) = positions.getPositionData(1);
 
         assertEq(sizeInTokenEnd, 0);
-        uint256 endingBalance = usdc.balanceOf(trader);
+        uint256 endingBalance = baseUsdc.balanceOf(trader);
         assertEq(endingBalance, startingBalance + FIFTY_USDC);
     }
 
     function test_close_position_in_profit() public liquidityDeposited {
-        uint256 sizeInTokenAmount = 0.01 ether;
+        uint256 sizeInTokenAmount = 0.05 ether;
 
         vm.startPrank(trader);
-        usdc.approve(address(positions), FIFTY_USDC);
+        baseUsdc.approve(address(positions), FIFTY_USDC);
         positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
-
-        (, uint256 sizeInTokenStart,,,,) = positions.getPositionData(1);
-        assertEq(sizeInTokenStart, sizeInTokenAmount);
-        uint256 startingBalance = usdc.balanceOf(trader);
-        uint256 startingTotalCollateral = positions.getTotalCollateral();
-
-        priceFeed.updateAnswer(7000_00000000);
-
-        uint256 sizeToDecrease = 0.01 ether;
-        positions.decreaseSize(1, sizeToDecrease);
-
+        ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
         vm.stopPrank();
 
+        vm.selectFork(baseFork);
+        (, uint256 sizeInTokenStart,,,,) = positions.getPositionData(1);
+        assertEq(sizeInTokenStart, sizeInTokenAmount);
+        uint256 startingBalance = baseUsdc.balanceOf(trader);
+        uint256 startingTotalCollateral = positions.getTotalCollateral();
+
+        basePriceFeed.updateAnswer(2500_00000000);
+        vm.selectFork(arbitrumFork);
+        arbPriceFeed.updateAnswer(2500_00000000);
+        uint256 arbUsdcTransferStart = arbUsdc.balanceOf(address(vault));
+
+        vm.selectFork(baseFork);
+        uint256 sizeToDecrease = 0.05 ether;
+        vm.prank(trader);
+        positions.decreaseSize(1, sizeToDecrease);
+        /// @dev send instructions for profit to Arbitrum
+        ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
+        /// @dev assert that tokens have left Arbitrum
+        uint256 arbUsdcTransferEnd = arbUsdc.balanceOf(address(vault));
+        assertGt(arbUsdcTransferStart, arbUsdcTransferEnd);
+        /// @dev send tokens from Arbitrum to Base
+        ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
+
+        vm.selectFork(baseFork);
         (, uint256 sizeInTokenEnd,,,,) = positions.getPositionData(1);
-        uint256 endingBalance = usdc.balanceOf(trader);
+        uint256 endingBalance = baseUsdc.balanceOf(trader);
         uint256 endingTotalCollateral = positions.getTotalCollateral();
         assertEq(sizeInTokenEnd, 0);
-        assertEq(endingBalance, startingBalance + (FIFTY_USDC * 2));
+        assertEq(endingBalance, startingBalance + (FIFTY_USDC));
         assertLt(endingTotalCollateral, startingTotalCollateral);
     }
 

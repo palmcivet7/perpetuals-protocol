@@ -201,7 +201,6 @@ contract Positions is IPositions, ReentrancyGuard {
         if (_sizeInTokenAmountToDecrease > position.sizeInToken) revert Positions__InvalidPositionSize();
 
         uint256 sizeInUsd = (position.sizeInUsd * _sizeInTokenAmountToDecrease) / position.sizeInToken;
-        _decreaseTotalOpenInterest(_sizeInTokenAmountToDecrease, sizeInUsd, position.isLong);
 
         // Get the current PnL of the position
         int256 pnl = getPositionPnl(_positionId);
@@ -222,9 +221,10 @@ contract Positions is IPositions, ReentrancyGuard {
             s_position[_positionId].sizeInToken -= _sizeInTokenAmountToDecrease;
             s_position[_positionId].sizeInUsd -= sizeInUsd;
 
-            // Transfer the realized PnL to the trader
-            i_ccipPositionsManager.approve(positiveRealisedPnlScaledToUsdc);
-            i_usdc.safeTransferFrom(address(i_ccipPositionsManager), msg.sender, positiveRealisedPnlScaledToUsdc);
+            /// @dev we send the message to the vault via ccip, saying "we need this much profit sent back to this trader"
+            i_ccipPositionsManager.ccipSend(
+                0, positiveRealisedPnlScaledToUsdc, msg.sender, _sizeInTokenAmountToDecrease, 0, false, false
+            );
         } else if (realisedPnl < 0) {
             // If the realized PnL is negative, convert to unsigned int and scale to USDC precision
             uint256 negativeRealisedPnl = uint256(realisedPnl.abs());
@@ -238,6 +238,7 @@ contract Positions is IPositions, ReentrancyGuard {
                 // Decrease the size of the position
                 s_position[_positionId].sizeInToken -= _sizeInTokenAmountToDecrease;
                 s_position[_positionId].sizeInUsd -= sizeInUsd;
+                _decreaseTotalOpenInterest(_sizeInTokenAmountToDecrease, sizeInUsd, position.isLong);
             } else {
                 // Set the collateral to zero if the realized loss exceeds it
                 s_totalCollateral -= collateral;
@@ -246,10 +247,14 @@ contract Positions is IPositions, ReentrancyGuard {
                 // Decrease the size of the position
                 s_position[_positionId].sizeInToken = 0;
                 s_position[_positionId].sizeInUsd = 0;
+                _decreaseTotalOpenInterestAndSendCollateral(
+                    collateral, _sizeInTokenAmountToDecrease, sizeInUsd, position.isLong
+                );
             }
         } else if (realisedPnl == 0) {
             s_position[_positionId].sizeInToken -= _sizeInTokenAmountToDecrease;
             s_position[_positionId].sizeInUsd -= sizeInUsd;
+            _decreaseTotalOpenInterest(_sizeInTokenAmountToDecrease, sizeInUsd, position.isLong);
         }
 
         if (position.sizeInToken == _sizeInTokenAmountToDecrease && realisedPnl >= 0) {
@@ -368,6 +373,19 @@ contract Positions is IPositions, ReentrancyGuard {
             i_ccipPositionsManager.ccipSend(0, 0, address(0), _sizeInToken, 0, false, false);
         } else {
             i_ccipPositionsManager.ccipSend(0, 0, address(0), 0, _sizeInUsd, false, false);
+        }
+    }
+
+    function _decreaseTotalOpenInterestAndSendCollateral(
+        uint256 _liquidatedCollateralToSend,
+        uint256 _sizeInToken,
+        uint256 _sizeInUsd,
+        bool _isLong
+    ) internal {
+        if (_isLong) {
+            i_ccipPositionsManager.ccipSend(_liquidatedCollateralToSend, 0, address(0), _sizeInToken, 0, false, false);
+        } else {
+            i_ccipPositionsManager.ccipSend(_liquidatedCollateralToSend, 0, address(0), 0, _sizeInUsd, false, false);
         }
     }
 
