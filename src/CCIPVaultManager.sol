@@ -18,6 +18,11 @@ contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
     using SafeERC20 for IERC20;
 
     /*//////////////////////////////////////////////////////////////
+                                 ERRORS
+    //////////////////////////////////////////////////////////////*/
+    error CCIPVaultManager__OnlyVault();
+
+    /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
     /// @dev Chainlink Token for paying for CCIP
@@ -31,6 +36,14 @@ contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
     address internal s_positionsManager;
     /// @dev Chain selector we are sending to and receiving from via ccip
     uint64 internal s_positionsManagerChainSelector;
+
+    /*//////////////////////////////////////////////////////////////
+                               MODIFIERS
+    //////////////////////////////////////////////////////////////*/
+    modifier onlyVault() {
+        if (msg.sender != address(i_vault)) revert CCIPVaultManager__OnlyVault();
+        _;
+    }
 
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
@@ -47,9 +60,18 @@ contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
     /*//////////////////////////////////////////////////////////////
                                   CCIP
     //////////////////////////////////////////////////////////////*/
-    function ccipSend() external {}
+    function ccipSend() external onlyVault {}
 
-    function _ccipReceive(Client.Any2EVMMessage memory message) internal override {}
+    function _ccipReceive(Client.Any2EVMMessage memory message) internal override {
+        /**
+         * receives:
+         *     uint256 _usdcAmount,
+         *     uint256 _openInterestLongInToken,
+         *     uint256 _openInterestShortInUsd,
+         *     bool _increaseLongInToken,
+         *     bool _increaseShortInUsd
+         */
+    }
 
     /*//////////////////////////////////////////////////////////////
                                  SETTER

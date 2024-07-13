@@ -18,6 +18,11 @@ contract CCIPPositionsManager is ICCIPPositionsManager, Ownable {
     using SafeERC20 for IERC20;
 
     /*//////////////////////////////////////////////////////////////
+                                 ERRORS
+    //////////////////////////////////////////////////////////////*/
+    error CCIPPositionsManager__OnlyVault();
+
+    /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
     /// @dev Chainlink Token for paying for CCIP
@@ -31,6 +36,14 @@ contract CCIPPositionsManager is ICCIPPositionsManager, Ownable {
     address internal s_vaultManager;
     /// @dev Chain selector we are sending to and receiving from via ccip
     uint64 internal s_vaultManagerChainSelector;
+
+    /*//////////////////////////////////////////////////////////////
+                               MODIFIERS
+    //////////////////////////////////////////////////////////////*/
+    modifier onlyPositions() {
+        if (msg.sender != address(i_positions)) revert CCIPPositionsManager__OnlyVault();
+        _;
+    }
 
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
@@ -47,7 +60,13 @@ contract CCIPPositionsManager is ICCIPPositionsManager, Ownable {
     /*//////////////////////////////////////////////////////////////
                                   CCIP
     //////////////////////////////////////////////////////////////*/
-    function ccipSend() external {}
+    function ccipSend(
+        uint256 _usdcAmount,
+        uint256 _openInterestLongInToken,
+        uint256 _openInterestShortInUsd,
+        bool _increaseLongInToken,
+        bool _increaseShortInUsd
+    ) external onlyPositions {}
 
     function _ccipReceive(Client.Any2EVMMessage memory message) internal override {}
 
