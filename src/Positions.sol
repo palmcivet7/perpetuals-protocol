@@ -408,16 +408,24 @@ contract Positions is IPositions, ReentrancyGuard {
     //////////////////////////////////////////////////////////////*/
     /// @dev Returns the latest price for the speculated asset by combining Chainlink and Pyth pricefeeds
     function getLatestPrice() public view returns (uint256) {
-        (, int256 price,,,) = i_priceFeed.latestRoundData();
-        // return uint256(price) * Constants.SCALING_FACTOR;
+        // Fetch Chainlink price
+        (, int256 chainlinkPrice,,,) = i_priceFeed.latestRoundData();
 
+        // Scale Chainlink price from 8 decimals to 18 decimals
+        uint256 chainlinkPrice18Decimals = uint256(chainlinkPrice) * Constants.SCALING_FACTOR;
+
+        // Fetch Pyth price
         PythStructs.Price memory priceStruct = i_pythFeed.getPriceUnsafe(i_pythFeedId);
-        uint256 pythPrice8Decimals = (uint256(uint64(priceStruct.price)) * Constants.WAD_PRECISION)
-            / (10 ** uint8(uint32(-1 * priceStruct.expo)));
 
-        uint256 finalPrice = (uint256(price) + pythPrice8Decimals) / 2;
+        // Calculate Pyth price in 18 decimals
+        uint256 pythPrice18Decimals =
+            (uint256(uint64(priceStruct.price)) * Constants.WAD_PRECISION) / (10 ** uint8(uint32(-1 * priceStruct.expo)));
 
-        return finalPrice * Constants.SCALING_FACTOR;
+        // Calculate the average price in 18 decimals
+        uint256 finalPrice18Decimals = (chainlinkPrice18Decimals + pythPrice18Decimals) / 2;
+
+        // The final price is already in 18 decimals, return it directly
+        return finalPrice18Decimals;
     }
 
     /// @dev Returns the PnL for a position
