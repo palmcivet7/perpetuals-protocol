@@ -8,4 +8,6 @@ interface IPositions {
     function getPositionsCount() external view returns (uint256);
 
     function getMaxLeverageExceeded(uint256 _positionId) external view returns (bool);
+
+    function liquidate(uint256 _positionId) external;
 }

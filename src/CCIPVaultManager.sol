@@ -21,6 +21,8 @@ contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
     error CCIPVaultManager__OnlyVault();
+    error CCIPVaultManager__WrongSender(address wrongSender);
+    error CCIPVaultManager__WrongSourceChain(uint64 wrongChainSelector);
 
     /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
@@ -62,7 +64,16 @@ contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
     //////////////////////////////////////////////////////////////*/
     function ccipSend() external onlyVault {}
 
-    function _ccipReceive(Client.Any2EVMMessage memory message) internal override {
+    function _ccipReceive(Client.Any2EVMMessage memory _message) internal override {
+        /// @dev revert if sender or source chain is not what we allowed
+        address expectedSender = s_positionsManager;
+        address sender = abi.decode(_message.sender, (address));
+        if (sender != expectedSender) revert CCIPVaultManager__WrongSender(sender);
+        uint64 expectedSourceChainSelector = s_positionsManagerChainSelector;
+        if (_message.sourceChainSelector != expectedSourceChainSelector) {
+            revert CCIPVaultManager__WrongSourceChain(_message.sourceChainSelector);
+        }
+
         /**
          * receives:
          *     uint256 _usdcAmount,

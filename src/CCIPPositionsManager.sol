@@ -11,7 +11,7 @@ import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeE
 import {IPositions} from "./interfaces/IPositions.sol";
 import {ICCIPPositionsManager} from "./interfaces/ICCIPPositionsManager.sol";
 
-contract CCIPPositionsManager is ICCIPPositionsManager, Ownable {
+contract CCIPPositionsManager is ICCIPPositionsManager, Ownable, CCIPReceiver {
     /*//////////////////////////////////////////////////////////////
                                LIBRARIES
     //////////////////////////////////////////////////////////////*/
@@ -66,7 +66,10 @@ contract CCIPPositionsManager is ICCIPPositionsManager, Ownable {
         uint256 _openInterestShortInUsd,
         bool _increaseLongInToken,
         bool _increaseShortInUsd
-    ) external onlyPositions {}
+    ) external onlyPositions {
+        address receiver = s_vaultManager;
+        uint64 destinationChainSelector = s_vaultManagerChainSelector;
+    }
 
     function _ccipReceive(Client.Any2EVMMessage memory message) internal override {}
 

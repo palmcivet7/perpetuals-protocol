@@ -95,7 +95,7 @@ contract AutomatedLiquidator is Ownable, AutomationCompatible {
     function performUpkeep(bytes calldata performData) external {
         if (msg.sender != s_forwarder) revert AutomatedLiquidator__OnlyForwarder();
         uint256 positionId = abi.decode(performData, (uint256));
-        i_perpetual.liquidate(positionId);
+        i_positions.liquidate(positionId);
     }
 
     /*//////////////////////////////////////////////////////////////
