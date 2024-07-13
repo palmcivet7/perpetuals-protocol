@@ -6,7 +6,6 @@ import {Test, console} from "forge-std/Test.sol";
 import {Positions, IPositions} from "../src/Positions.sol";
 import {Vault, IVault} from "../src/Vault.sol";
 import {MockV3Aggregator} from "./mocks/MockV3Aggregator.sol";
-import {MockUsdc} from "./mocks/MockUsdc.sol";
 import {SignedMath} from "@openzeppelin/contracts/utils/math/SignedMath.sol";
 import {CCIPLocalSimulatorFork} from "@chainlink-local/src/ccip/CCIPLocalSimulatorFork.sol";
 import {CCIPPositionsManager} from "../src/CCIPPositionsManager.sol";
