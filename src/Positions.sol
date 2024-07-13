@@ -357,21 +357,17 @@ contract Positions is IPositions, ReentrancyGuard {
 
     function _increaseTotalOpenInterest(uint256 _sizeInToken, uint256 _sizeInUsd, bool _isLong) internal {
         if (_isLong) {
-            s_totalOpenInterestLongInToken += _sizeInToken;
-            s_totalOpenInterestLongInUsd += _sizeInUsd;
+            i_ccipPositionsManager.ccipSend(0, 0, address(0), _sizeInToken, 0, true, false);
         } else {
-            s_totalOpenInterestShortInToken += _sizeInToken;
-            s_totalOpenInterestShortInUsd += _sizeInUsd;
+            i_ccipPositionsManager.ccipSend(0, 0, address(0), 0, _sizeInUsd, false, true);
         }
     }
 
     function _decreaseTotalOpenInterest(uint256 _sizeInToken, uint256 _sizeInUsd, bool _isLong) internal {
         if (_isLong) {
-            s_totalOpenInterestLongInToken -= _sizeInToken;
-            s_totalOpenInterestLongInUsd -= _sizeInUsd;
+            i_ccipPositionsManager.ccipSend(0, 0, address(0), _sizeInToken, 0, false, false);
         } else {
-            s_totalOpenInterestShortInToken -= _sizeInToken;
-            s_totalOpenInterestShortInUsd -= _sizeInUsd;
+            i_ccipPositionsManager.ccipSend(0, 0, address(0), 0, _sizeInUsd, false, false);
         }
     }
 

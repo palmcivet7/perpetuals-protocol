@@ -233,6 +233,14 @@ contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
         return availableLiquidity;
     }
 
+    function getOpenInterestLongInToken() external view returns (uint256) {
+        return s_totalOpenInterestLongInToken;
+    }
+
+    function getOpenInterestShortInUsd() external view returns (uint256) {
+        return s_totalOpenInterestShortInUsd;
+    }
+
     /*//////////////////////////////////////////////////////////////
                                  SETTER
     //////////////////////////////////////////////////////////////*/

@@ -98,8 +98,8 @@ contract PositionsTest is Test {
         assertEq(IERC20(baseSepNetworkDetails.linkAddress).balanceOf(address(positionsManager)), FIFTY_LINK);
 
         // Send USDC to trader
-        deal(baseSepNetworkDetails.ccipBnMAddress, liquidityProvider, FIFTY_USDC);
-        assertEq(IERC20(baseSepNetworkDetails.ccipBnMAddress).balanceOf(liquidityProvider), FIFTY_USDC);
+        deal(baseSepNetworkDetails.ccipBnMAddress, trader, FIFTY_USDC);
+        assertEq(IERC20(baseSepNetworkDetails.ccipBnMAddress).balanceOf(trader), FIFTY_USDC);
         baseUsdc = BurnMintERC677Helper(baseSepNetworkDetails.ccipBnMAddress);
 
         // Set VaultManager address and chain selector as allowed in PositionsManager on Base
@@ -116,13 +116,17 @@ contract PositionsTest is Test {
         vaultManager.setPositionsManagerAddress(address(positionsManager));
     }
 
-    function test_setUp() public {}
+    function test_setUp() public liquidityDeposited {}
 
     modifier liquidityDeposited() {
+        vm.selectFork(arbitrumFork);
         vm.startPrank(liquidityProvider);
-        usdc.approve(address(vault), FIFTY_USDC);
+        arbUsdc.approve(address(vault), FIFTY_USDC);
         vault.deposit(FIFTY_USDC, liquidityProvider);
+        ccipLocalSimulatorFork.switchChainAndRouteMessage(baseFork);
+        assertEq(positionsManager.getTotalLiquidity(), FIFTY_USDC);
         vm.stopPrank();
+        vm.selectFork(baseFork);
         _;
     }
 
@@ -133,8 +137,10 @@ contract PositionsTest is Test {
         uint256 sizeInTokenAmount = 0.5 ether; // half an index token
 
         vm.startPrank(trader);
-        usdc.approve(address(positions), FIFTY_USDC);
+        baseUsdc.approve(address(positions), FIFTY_USDC);
         positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+        ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
+        assertEq(vaultManager.getOpenInterestLongInToken(), sizeInTokenAmount);
         vm.stopPrank();
     }
 
