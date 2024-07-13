@@ -148,7 +148,7 @@ contract PositionsTest is Test {
         uint256 sizeInTokenAmount = 2 ether;
 
         vm.startPrank(trader);
-        usdc.approve(address(positions), FIFTY_USDC);
+        baseUsdc.approve(address(positions), FIFTY_USDC);
         vm.expectRevert(Positions.Positions__MaxLeverageExceeded.selector);
         positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
         vm.stopPrank();
@@ -158,6 +158,7 @@ contract PositionsTest is Test {
                              VAULT WITHDRAW
     //////////////////////////////////////////////////////////////*/
     function test_lp_can_withdraw() public liquidityDeposited {
+        vm.selectFork(arbitrumFork);
         uint256 maxWithdraw = vault.maxWithdraw(liquidityProvider);
         vm.prank(liquidityProvider);
         vault.withdraw(maxWithdraw, liquidityProvider, liquidityProvider);
@@ -166,31 +167,38 @@ contract PositionsTest is Test {
     function test_lp_cant_withdraw_reserved_liquidity() public liquidityDeposited {
         uint256 sizeInTokenAmount = 0.01 ether;
         vm.startPrank(trader);
-        usdc.approve(address(positions), FIFTY_USDC);
+        baseUsdc.approve(address(positions), FIFTY_USDC);
         positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+        ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
         vm.stopPrank();
 
+        vm.selectFork(baseFork);
         uint256 availableLiquidityBeforePriceChange = positions.getAvailableLiquidity();
-        console.log("availableLiquidityBeforePriceChange:", availableLiquidityBeforePriceChange);
+        uint256 initialRecordedLiquidity = positionsManager.getTotalLiquidity();
 
-        priceFeed.updateAnswer(5000_00000000);
+        basePriceFeed.updateAnswer(3500_00000000);
+        vm.selectFork(arbitrumFork);
+        arbPriceFeed.updateAnswer(3500_00000000);
 
-        uint256 expectedWithdrawnAmount = positions.getAvailableLiquidity();
-        console.log("expectedWithdrawnAmount:", expectedWithdrawnAmount);
+        uint256 expectedWithdrawnAmount = vaultManager.getAvailableLiquidity();
 
         assert(availableLiquidityBeforePriceChange != expectedWithdrawnAmount);
         assertGt(availableLiquidityBeforePriceChange, expectedWithdrawnAmount);
         assertGt(expectedWithdrawnAmount, 0);
 
-        uint256 lpBalanceStart = usdc.balanceOf(liquidityProvider);
+        uint256 lpBalanceStart = arbUsdc.balanceOf(liquidityProvider);
         uint256 maxWithdraw = vault.maxWithdraw(liquidityProvider);
 
         vm.prank(liquidityProvider);
         vault.withdraw(maxWithdraw, liquidityProvider, liquidityProvider);
+        ccipLocalSimulatorFork.switchChainAndRouteMessage(baseFork);
+        uint256 endingRecordedLiquidity = positionsManager.getTotalLiquidity();
 
-        uint256 lpBalanceEnd = usdc.balanceOf(liquidityProvider);
+        vm.selectFork(arbitrumFork);
+        uint256 lpBalanceEnd = arbUsdc.balanceOf(liquidityProvider);
         uint256 actualWithdrawnAmount = lpBalanceEnd - lpBalanceStart;
         assertEq(expectedWithdrawnAmount, actualWithdrawnAmount);
+        assertGt(initialRecordedLiquidity, endingRecordedLiquidity);
     }
 
     /*//////////////////////////////////////////////////////////////

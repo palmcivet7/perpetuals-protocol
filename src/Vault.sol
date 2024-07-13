@@ -63,7 +63,9 @@ contract Vault is IVault, ERC4626 {
         uint256 availableLiquidity = i_ccipVaultManager.getAvailableLiquidity();
         if (assets > availableLiquidity) revert Vault__InsufficientLiquidity();
 
-        return super.withdraw(assets, receiver, owner);
+        uint256 shares = super.withdraw(assets, receiver, owner);
+        i_ccipVaultManager.ccipSend(assets, false, 0, address(0));
+        return shares;
     }
 
     /// @dev Only callable by the Positions contract
