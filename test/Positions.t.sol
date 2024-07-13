@@ -208,26 +208,32 @@ contract PositionsTest is Test {
         uint256 sizeInTokenAmount = 0.25 ether;
 
         vm.startPrank(trader);
-        usdc.approve(address(positions), FIFTY_USDC);
+        baseUsdc.approve(address(positions), FIFTY_USDC);
         positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
-
-        uint256 sizeToIncrease = 0.25 ether;
-        positions.increaseSize(1, sizeToIncrease);
-
+        ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
         vm.stopPrank();
+
+        vm.selectFork(baseFork);
+        uint256 sizeToIncrease = 0.25 ether;
+        vm.prank(trader);
+        positions.increaseSize(1, sizeToIncrease);
+        ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
+        assertEq(vaultManager.getOpenInterestLongInToken(), sizeInTokenAmount + sizeToIncrease);
     }
 
     function test_increaseSize_reverts_if_max_leverage_exceeded() public liquidityDeposited {
         uint256 sizeInTokenAmount = 0.25 ether;
         vm.startPrank(trader);
-        usdc.approve(address(positions), FIFTY_USDC);
+        baseUsdc.approve(address(positions), FIFTY_USDC);
         positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+        ccipLocalSimulatorFork.switchChainAndRouteMessage(arbitrumFork);
+        vm.stopPrank();
 
+        vm.selectFork(baseFork);
         uint256 sizeToIncrease = 10e18;
+        vm.prank(trader);
         vm.expectRevert(Positions.Positions__MaxLeverageExceeded.selector);
         positions.increaseSize(1, sizeToIncrease);
-
-        vm.stopPrank();
     }
 
     /*//////////////////////////////////////////////////////////////
