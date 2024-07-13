@@ -14,6 +14,7 @@ import {BurnMintERC677Helper} from "@chainlink-local/src/ccip/CCIPLocalSimulator
 import {Register} from "@chainlink-local/src/ccip/Register.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {MockPyth} from "./mocks/MockPyth.sol";
+import {MockWorldID} from "./mocks/MockWorldID.sol";
 
 contract PositionsTest is Test {
     using SignedMath for int256;
@@ -28,6 +29,7 @@ contract PositionsTest is Test {
     BurnMintERC677Helper baseUsdc;
     MockPyth arbPythFeed;
     MockPyth basePythFeed;
+    MockWorldID mockWorldId;
 
     CCIPLocalSimulatorFork ccipLocalSimulatorFork;
     uint256 arbitrumFork;
@@ -47,6 +49,21 @@ contract PositionsTest is Test {
     uint256 constant BASE_SEPOLIA_CHAINID = 84532;
 
     bytes32 constant PYTH_FEED_ETHUSD_ID = 0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace;
+
+    string constant WORLDID_APP_ID = "app_staging_704615d1d9d9dba9a0b556954779d3ae";
+    string constant WORLDID_ACTION_ID = "openPosition";
+
+    uint256[8] proof = [
+        0x29cddd130f81c1a0abd4b1077c82e556fe9e6a7d8915baac867dd6392e03fc10,
+        0x1fabf9e4a1b45abcb1580565c9d615c8616ad588b1a01ade07a00ff7d965442b,
+        0x23ccc263123e8cd76ea7773c6d4eddc2d4f7b4feba213f85dfb56070e42a87b7,
+        0x226b40abc0db1a9fa7c8a440e30ca321639df97c844d1a1d385d3e3073e805a0,
+        0x13779875425d9baa6f71597fe9ac21e3c0ef35b27802068c5528ed28231c050c,
+        0x68e7081aa8912a70d404f5ac668709898e496e79af27a41228f94ee501f2f84,
+        0x249471298db747c1e1e7388bb41e58ec2d541bdd6eee00be3b6ce9f02977df90,
+        0x19ce330c2870c52b0855be468f9bc91e8bb6b6c0e26545363b1be467f92eb40e
+    ];
+    uint256 constant WORLDID_ROOT = 0x231c157755ced1799aeb4e74149eaf576b0838c40c70cbb3aa803cb4ee860760;
 
     Register.NetworkDetails arbSepNetworkDetails;
     Register.NetworkDetails baseSepNetworkDetails;
@@ -93,13 +110,17 @@ contract PositionsTest is Test {
         vm.selectFork(baseFork);
         basePriceFeed = new MockV3Aggregator(8, 2000_00000000);
         basePythFeed = new MockPyth(2000_00000000, 0, -8);
+        mockWorldId = new MockWorldID();
         positions = new Positions(
             baseSepNetworkDetails.routerAddress,
             baseSepNetworkDetails.linkAddress,
             baseSepNetworkDetails.ccipBnMAddress,
             address(basePriceFeed),
             address(basePythFeed),
-            PYTH_FEED_ETHUSD_ID
+            PYTH_FEED_ETHUSD_ID,
+            address(mockWorldId),
+            WORLDID_APP_ID,
+            WORLDID_ACTION_ID
         );
         positionsManager = CCIPPositionsManager(positions.getCcipPositionsManager());
 
