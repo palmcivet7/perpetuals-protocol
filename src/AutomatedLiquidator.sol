@@ -9,18 +9,26 @@ import {AutomationCompatible} from "@chainlink/contracts/src/v0.8/automation/Aut
 import {AutomationRegistrarInterface, RegistrationParams} from "./interfaces/AutomationRegistrarInterface.sol";
 import {IAutomationRegistryConsumer} from
     "@chainlink/contracts-ccip/src/v0.8/automation/interfaces/IAutomationRegistryConsumer.sol";
+import {IPoolManager} from "@uniswap/v4-core/interfaces/IPoolManager.sol";
+import {IUnlockCallback} from "v4-core/contracts/interfaces/callback/IUnlockCallback.sol";
+import {PoolKey} from "v4-core/contracts/types/PoolKey.sol";
+import {SwapParams} from "v4-core/contracts/types/SwapParams.sol";
+import {BalanceDelta} from "v4-core/contracts/types/BalanceDelta.sol";
 import {IPositions} from "./interfaces/IPositions.sol";
 
-contract AutomatedLiquidator is Ownable, AutomationCompatible {
+contract AutomatedLiquidator is Ownable, AutomationCompatible, IUnlockCallback {
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
     error AutomatedLiquidator__AutomationRegistrationFailed();
     error AutomatedLiquidator__OnlyForwarder();
+    error AutomatedLiquidator__OnlyPoolManager();
 
     /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
+    /// @dev When our USDC balance reaches this threshold we swap it for LINK
+    uint256 internal constant SWAP_THRESHOLD = 100_000_000;
     /// @dev 3 LINK - deployer must have this in their wallet
     uint96 internal constant STARTING_LINK_FOR_REGISTRATION = 3 * 1e18;
 
@@ -34,6 +42,12 @@ contract AutomatedLiquidator is Ownable, AutomationCompatible {
     uint256 internal immutable i_subId;
     /// @dev Positions contract native to our system
     IPositions internal immutable i_positions;
+    /// @dev USDC token
+    IERC20 internal immutable i_usdc;
+    /// @dev WETH token
+    IERC20 internal immutable i_weth;
+    /// @dev Uniswap V4 PoolManager
+    IPoolManager internal immutable i_poolManager;
 
     /// @dev Automation forwarder address
     address internal s_forwarder;
@@ -46,9 +60,15 @@ contract AutomatedLiquidator is Ownable, AutomationCompatible {
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
-    constructor(address _link, address _registrar, address _automationConsumer, address _positions)
-        Ownable(msg.sender)
-    {
+    constructor(
+        address _link,
+        address _registrar,
+        address _automationConsumer,
+        address _positions,
+        address _usdc,
+        address _weth,
+        address _poolManager
+    ) Ownable(msg.sender) {
         i_link = LinkTokenInterface(_link);
         i_registrar = AutomationRegistrarInterface(_registrar);
         i_automationConsumer = IAutomationRegistryConsumer(_automationConsumer);
@@ -70,6 +90,10 @@ contract AutomatedLiquidator is Ownable, AutomationCompatible {
         i_subId = i_registrar.registerUpkeep(params);
         if (i_subId != 0) emit UpkeepRegistered(i_subId);
         else revert AutomatedLiquidator__AutomationRegistrationFailed();
+
+        i_usdc = IERC20(_usdc);
+        i_weth = IERC20(_weth);
+        i_poolManager = IPoolManager(_poolManager);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -96,6 +120,79 @@ contract AutomatedLiquidator is Ownable, AutomationCompatible {
         if (msg.sender != s_forwarder) revert AutomatedLiquidator__OnlyForwarder();
         uint256 positionId = abi.decode(performData, (uint256));
         i_positions.liquidate(positionId);
+
+        // if we have more than 100 USDC in the contract, swap it for LINK and fund automation
+        if (i_usdc.balanceOf(address(this)) > SWAP_THRESHOLD) _swapLiquidationRewardsAndFundAutomation();
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                                UNISWAP
+    //////////////////////////////////////////////////////////////*/
+    function _swapLiquidationRewardsAndFundAutomation() internal {
+        uint256 balance = i_usdc.balanceOf(address(this));
+
+        // Approve pool manager to spend USDC
+        i_usdc.approve(address(i_poolManager), balance);
+
+        // Encode the data for unlocking
+        bytes memory data = abi.encode(balance);
+
+        // Call unlock on the pool manager, which will call unlockCallback
+        i_poolManager.unlock(data);
+    }
+
+    function unlockCallback(bytes calldata data) external override returns (bytes memory) {
+        if (msg.sender != address(i_poolManager)) revert AutomatedLiquidator__OnlyPoolManager();
+
+        (uint256 amountUSDC) = abi.decode(data, (uint256));
+
+        // Swap USDC to WETH
+        PoolKey memory usdcWethKey = PoolKey({
+            currency0: address(i_usdc),
+            currency1: address(i_weth),
+            fee: 3000 // Assuming a 0.3% fee tier
+        });
+
+        SwapParams memory usdcWethParams = SwapParams({
+            zeroForOne: true, // Swapping USDC (currency0) for WETH (currency1)
+            amountSpecified: int256(amountUSDC),
+            sqrtPriceLimitX96: 0 // Setting to zero to allow any price, bad practice but just for simplicity
+        });
+
+        bytes memory hookDataForUSDCtoWETH = "";
+
+        BalanceDelta memory balanceDeltaWETH = i_poolManager.swap(usdcWethKey, usdcWethParams, hookDataForUSDCtoWETH);
+
+        // Extract WETH amount received from balanceDeltaWETH
+        uint256 amountWETHReceived = uint256(balanceDeltaWETH.delta1);
+
+        // Approve pool manager to spend WETH
+        i_weth.approve(address(i_poolManager), amountWETHReceived);
+
+        // Swap WETH to LINK
+        PoolKey memory wethLinkKey = PoolKey({
+            currency0: address(i_weth),
+            currency1: address(i_link),
+            fee: 3000 // Assuming a 0.3% fee tier
+        });
+
+        SwapParams memory wethLinkParams = SwapParams({
+            zeroForOne: true, // Swapping WETH (currency0) for LINK (currency1)
+            amountSpecified: int256(amountWETHReceived),
+            sqrtPriceLimitX96: 0 // Setting to zero to allow any price, bad practice but just for simplicity
+        });
+
+        bytes memory hookDataForWETHtoLINK = "";
+
+        BalanceDelta memory balanceDeltaLINK = i_poolManager.swap(wethLinkKey, wethLinkParams, hookDataForWETHtoLINK);
+
+        // Extract LINK amount received from balanceDeltaLINK
+        uint256 amountLINKReceived = uint256(balanceDeltaLINK.delta1);
+
+        // Send the swapped LINK to Chainlink automation subscription
+        i_automationConsumer.addFunds(i_subId, uint96(amountLINKReceived));
+
+        return "";
     }
 
     /*//////////////////////////////////////////////////////////////
