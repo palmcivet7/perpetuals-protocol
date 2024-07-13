@@ -88,6 +88,10 @@ contract Vault is IVault, ERC4626 {
         return super.totalAssets();
     }
 
+    function getCcipVaultManager() external view returns (address) {
+        return address(i_ccipVaultManager);
+    }
+
     /*//////////////////////////////////////////////////////////////
                            DISABLED FUNCTIONS
     //////////////////////////////////////////////////////////////*/

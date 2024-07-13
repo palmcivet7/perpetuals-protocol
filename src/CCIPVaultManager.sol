@@ -236,11 +236,11 @@ contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
     /*//////////////////////////////////////////////////////////////
                                  SETTER
     //////////////////////////////////////////////////////////////*/
-    function setVaultManagerChainSelector(uint64 _chainSelector) external onlyOwner {
+    function setPositionsManagerChainSelector(uint64 _chainSelector) external onlyOwner {
         s_positionsManagerChainSelector = _chainSelector;
     }
 
-    function setVaultManagerAddress(address _positionsManager) external onlyOwner {
+    function setPositionsManagerAddress(address _positionsManager) external onlyOwner {
         s_positionsManager = _positionsManager;
     }
 }

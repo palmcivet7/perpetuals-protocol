@@ -8,36 +8,115 @@ import {Vault, IVault} from "../src/Vault.sol";
 import {MockV3Aggregator} from "./mocks/MockV3Aggregator.sol";
 import {MockUsdc} from "./mocks/MockUsdc.sol";
 import {SignedMath} from "@openzeppelin/contracts/utils/math/SignedMath.sol";
+import {CCIPLocalSimulatorFork} from "@chainlink-local/src/ccip/CCIPLocalSimulatorFork.sol";
+import {CCIPPositionsManager} from "../src/CCIPPositionsManager.sol";
+import {CCIPVaultManager} from "../src/CCIPVaultManager.sol";
+import {BurnMintERC677Helper} from "@chainlink-local/src/ccip/CCIPLocalSimulator.sol";
+import {Register} from "@chainlink-local/src/ccip/Register.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract PositionsTest is Test {
     using SignedMath for int256;
 
     Positions positions;
     Vault vault;
-    MockV3Aggregator priceFeed;
-    MockUsdc usdc;
+    CCIPPositionsManager positionsManager;
+    CCIPVaultManager vaultManager;
+    MockV3Aggregator arbPriceFeed;
+    MockV3Aggregator basePriceFeed;
+    BurnMintERC677Helper arbUsdc;
+    BurnMintERC677Helper baseUsdc;
+
+    CCIPLocalSimulatorFork ccipLocalSimulatorFork;
+    uint256 arbitrumFork;
+    uint256 baseFork;
 
     address trader = makeAddr("trader");
     address liquidityProvider = makeAddr("liquidityProvider");
     address liquidator = makeAddr("liquidator");
+    address usdcMinter = makeAddr("usdcMinter");
 
     uint256 constant FIFTY_USDC = 50_000_000;
     uint256 constant ONE_USDC = 1_000_000;
     uint256 constant WAD = 1e18;
+    uint256 constant FIFTY_LINK = 50 * 1e18;
+
+    uint256 constant ARB_SEPOLIA_CHAINID = 421614;
+    uint256 constant BASE_SEPOLIA_CHAINID = 84532;
+
+    Register.NetworkDetails arbSepNetworkDetails;
+    Register.NetworkDetails baseSepNetworkDetails;
 
     /*//////////////////////////////////////////////////////////////
                                  SETUP
     //////////////////////////////////////////////////////////////*/
     function setUp() public {
-        usdc = new MockUsdc();
-        priceFeed = new MockV3Aggregator(8, 2000_00000000); // index tokens are initially worth $2k
-        (, int256 initialPrice,,,) = priceFeed.latestRoundData();
-        assertEq(initialPrice, 2000_00000000);
-        usdc.mint(liquidityProvider, FIFTY_USDC);
-        usdc.mint(trader, FIFTY_USDC);
-        positions = new Positions(address(priceFeed), address(usdc));
-        vault = Vault(address(positions.getVault()));
+        // Create Arbitrum and Base networks
+        string memory ARBITRUM_SEPOLIA_RPC_URL = vm.envString("ARBITRUM_SEPOLIA_RPC_URL");
+        string memory BASE_SEPOLIA_RPC_URL = vm.envString("BASE_SEPOLIA_RPC_URL");
+        arbitrumFork = vm.createSelectFork(ARBITRUM_SEPOLIA_RPC_URL);
+        baseFork = vm.createFork(BASE_SEPOLIA_RPC_URL);
+
+        ccipLocalSimulatorFork = new CCIPLocalSimulatorFork();
+        vm.makePersistent(address(ccipLocalSimulatorFork));
+
+        arbSepNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(ARB_SEPOLIA_CHAINID);
+        baseSepNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(BASE_SEPOLIA_CHAINID);
+
+        // Deploy Vault on Arbitrum
+        arbPriceFeed = new MockV3Aggregator(8, 2000_00000000);
+        vault = new Vault(
+            arbSepNetworkDetails.routerAddress,
+            arbSepNetworkDetails.linkAddress,
+            arbSepNetworkDetails.ccipBnMAddress,
+            address(arbPriceFeed)
+        );
+        vaultManager = CCIPVaultManager(vault.getCcipVaultManager());
+
+        // Send LINK to VaultManager for ccip fees
+        deal(arbSepNetworkDetails.linkAddress, address(vaultManager), FIFTY_LINK);
+        assertEq(IERC20(arbSepNetworkDetails.linkAddress).balanceOf(address(vaultManager)), FIFTY_LINK);
+
+        // Send USDC to liquidityProvider
+        deal(arbSepNetworkDetails.ccipBnMAddress, liquidityProvider, FIFTY_USDC);
+        assertEq(IERC20(arbSepNetworkDetails.ccipBnMAddress).balanceOf(liquidityProvider), FIFTY_USDC);
+        arbUsdc = BurnMintERC677Helper(arbSepNetworkDetails.ccipBnMAddress);
+
+        // Switch to Base and deploy Positions
+        vm.selectFork(baseFork);
+        basePriceFeed = new MockV3Aggregator(8, 2000_00000000);
+        positions = new Positions(
+            baseSepNetworkDetails.routerAddress,
+            baseSepNetworkDetails.linkAddress,
+            baseSepNetworkDetails.ccipBnMAddress,
+            address(basePriceFeed)
+        );
+        positionsManager = CCIPPositionsManager(positions.getCcipPositionsManager());
+
+        // Send LINK to PositionsManager for ccip fees
+        deal(baseSepNetworkDetails.linkAddress, address(positionsManager), FIFTY_LINK);
+        assertEq(IERC20(baseSepNetworkDetails.linkAddress).balanceOf(address(positionsManager)), FIFTY_LINK);
+
+        // Send USDC to trader
+        deal(baseSepNetworkDetails.ccipBnMAddress, liquidityProvider, FIFTY_USDC);
+        assertEq(IERC20(baseSepNetworkDetails.ccipBnMAddress).balanceOf(liquidityProvider), FIFTY_USDC);
+        baseUsdc = BurnMintERC677Helper(baseSepNetworkDetails.ccipBnMAddress);
+
+        // Set VaultManager address and chain selector as allowed in PositionsManager on Base
+        vm.prank(positionsManager.owner());
+        positionsManager.setVaultManagerChainSelector(arbSepNetworkDetails.chainSelector);
+        vm.prank(positionsManager.owner());
+        positionsManager.setVaultManagerAddress(address(vaultManager));
+
+        // Set PositionsManager address and chain selector as allowed in VaultManager on Arbitrum
+        vm.selectFork(arbitrumFork);
+        vm.prank(vaultManager.owner());
+        vaultManager.setPositionsManagerChainSelector(baseSepNetworkDetails.chainSelector);
+        vm.prank(vaultManager.owner());
+        vaultManager.setPositionsManagerAddress(address(positionsManager));
     }
+
+    function test_setUp() public {}
 
     modifier liquidityDeposited() {
         vm.startPrank(liquidityProvider);

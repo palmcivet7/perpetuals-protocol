@@ -454,4 +454,8 @@ contract Positions is IPositions, ReentrancyGuard {
     function getMaxLeverageExceeded(uint256 _positionId) external view returns (bool) {
         return _isMaxLeverageExceeded(_positionId);
     }
+
+    function getCcipPositionsManager() external view returns (address) {
+        return address(i_ccipPositionsManager);
+    }
 }
