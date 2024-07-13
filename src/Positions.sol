@@ -8,6 +8,7 @@ import {SignedMath} from "@openzeppelin/contracts/utils/math/SignedMath.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import {IPositions} from "./interfaces/IPositions.sol";
 import {IVault, Vault} from "./Vault.sol";
+import {Constants} from "./libraries/Constants.sol";
 
 contract Positions is IPositions, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
@@ -32,17 +33,17 @@ contract Positions is IPositions, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
-    uint256 internal constant PRICE_FEED_PRECISION = 10 ** 8; // 1e8
-    uint256 internal constant WAD_PRECISION = 10 ** 18; // 1e18
-    uint256 internal constant SCALING_FACTOR = WAD_PRECISION / PRICE_FEED_PRECISION;
-    uint256 internal constant USDC_PRECISION = 10 ** 6; // 1e6
-    /// @dev The size of a position can be 20x the collateral, but exceeding this results in liquidation
-    uint256 internal constant MAX_LEVERAGE = 20;
-    /// @dev Traders cannot utilize more than a configured percentage of the deposited liquidity
-    uint256 internal constant MAX_UTILIZATION_PERCENTAGE = 8000;
-    uint256 internal constant BASIS_POINT_DIVISOR = 10000;
-    uint256 internal constant LIQUIDATION_BONUS = 2000;
-    int256 internal constant INT_PRECISION = 10 ** 18;
+    // uint256 internal constant PRICE_FEED_PRECISION = 10 ** 8; // 1e8
+    // uint256 internal constant WAD_PRECISION = 10 ** 18; // 1e18
+    // uint256 internal constant SCALING_FACTOR = WAD_PRECISION / PRICE_FEED_PRECISION;
+    // uint256 internal constant USDC_PRECISION = 10 ** 6; // 1e6
+    // /// @dev The size of a position can be 20x the collateral, but exceeding this results in liquidation
+    // uint256 internal constant MAX_LEVERAGE = 20;
+    // /// @dev Traders cannot utilize more than a configured percentage of the deposited liquidity
+    // uint256 internal constant MAX_UTILIZATION_PERCENTAGE = 8000;
+    // uint256 internal constant BASIS_POINT_DIVISOR = 10000;
+    // uint256 internal constant LIQUIDATION_BONUS = 2000;
+    // int256 internal constant INT_PRECISION = 10 ** 18;
 
     /// @dev Chainlink PriceFeed for the token being speculated on
     AggregatorV3Interface internal immutable i_priceFeed;
@@ -134,7 +135,7 @@ contract Positions is IPositions, ReentrancyGuard {
         nonReentrant
     {
         uint256 currentPrice = getLatestPrice();
-        uint256 sizeInUsd = (_sizeInTokenAmount * currentPrice) / WAD_PRECISION;
+        uint256 sizeInUsd = (_sizeInTokenAmount * currentPrice) / Constants.WAD_PRECISION;
 
         s_positionsCount++;
         uint256 positionId = s_positionsCount;
@@ -167,7 +168,7 @@ contract Positions is IPositions, ReentrancyGuard {
         Position memory position = s_position[_positionId];
         if (msg.sender != position.trader) revert Positions__OnlyTrader();
 
-        uint256 sizeInUsd = (_sizeInTokenAmountToIncrease * getLatestPrice()) / WAD_PRECISION;
+        uint256 sizeInUsd = (_sizeInTokenAmountToIncrease * getLatestPrice()) / Constants.WAD_PRECISION;
 
         s_position[_positionId].sizeInToken += _sizeInTokenAmountToIncrease;
         _increaseTotalOpenInterest(_sizeInTokenAmountToIncrease, sizeInUsd, position.isLong);
@@ -335,7 +336,8 @@ contract Positions is IPositions, ReentrancyGuard {
         // transfer 20% of any remaining collateral to the liquidator
         if (remainingCollateral > 0) {
             // calculate 20% of position.collateralAmount
-            uint256 liquidationReward = (remainingCollateral * LIQUIDATION_BONUS) / BASIS_POINT_DIVISOR;
+            uint256 liquidationReward =
+                (remainingCollateral * Constants.LIQUIDATION_BONUS) / Constants.BASIS_POINT_DIVISOR;
             i_vault.approve(liquidationReward);
             i_usdc.safeTransferFrom(address(i_vault), msg.sender, liquidationReward);
         }
@@ -362,9 +364,9 @@ contract Positions is IPositions, ReentrancyGuard {
         if (effectiveCollateral == 0) return true;
 
         uint256 currentPrice = getLatestPrice();
-        uint256 sizeInUsd = (position.sizeInToken * currentPrice) / WAD_PRECISION;
+        uint256 sizeInUsd = (position.sizeInToken * currentPrice) / Constants.WAD_PRECISION;
         uint256 sizeInUsdScaled = _scaleToUSDC(sizeInUsd);
-        uint256 effectiveCollateralByLeverage = effectiveCollateral * MAX_LEVERAGE;
+        uint256 effectiveCollateralByLeverage = effectiveCollateral * Constants.MAX_LEVERAGE;
 
         return (effectiveCollateralByLeverage < sizeInUsdScaled);
     }
@@ -390,7 +392,7 @@ contract Positions is IPositions, ReentrancyGuard {
     }
 
     function _scaleToUSDC(uint256 _amount) internal pure returns (uint256) {
-        return _amount / (WAD_PRECISION / USDC_PRECISION);
+        return _amount / (Constants.WAD_PRECISION / Constants.USDC_PRECISION);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -413,11 +415,13 @@ contract Positions is IPositions, ReentrancyGuard {
         if (position.isLong) {
             /// Formula for Long PnL:
             /// (Current Market Value - Average Position Price) * Size In Tokens
-            pnl = ((int256(currentPrice) - int256(position.openPrice)) * int256(position.sizeInToken)) / INT_PRECISION;
+            pnl = ((int256(currentPrice) - int256(position.openPrice)) * int256(position.sizeInToken))
+                / Constants.INT_PRECISION;
         } else {
             /// Formula for Short PnL:
             /// (Average Position Price - Current Market Value) * Size In Tokens
-            pnl = ((int256(position.openPrice) - int256(currentPrice)) * int256(position.sizeInToken)) / INT_PRECISION;
+            pnl = ((int256(position.openPrice) - int256(currentPrice)) * int256(position.sizeInToken))
+                / Constants.INT_PRECISION;
         }
         return pnl;
     }
@@ -428,13 +432,13 @@ contract Positions is IPositions, ReentrancyGuard {
         uint256 totalLiquidity = i_vault.totalAssets();
 
         // Calculate and scale the total open interest
-        uint256 currentPrice = getLatestPrice();
-        uint256 totalOpenInterestLong = (s_totalOpenInterestLongInToken * currentPrice) / WAD_PRECISION;
+        uint256 totalOpenInterestLong = (s_totalOpenInterestLongInToken * getLatestPrice()) / Constants.WAD_PRECISION;
         uint256 totalOpenInterest = totalOpenInterestLong + s_totalOpenInterestShortInUsd;
         uint256 totalOpenInterestScaled = _scaleToUSDC(totalOpenInterest);
 
         // Calculate max utilization liquidity
-        uint256 maxUtilizationLiquidity = (totalLiquidity * MAX_UTILIZATION_PERCENTAGE) / BASIS_POINT_DIVISOR;
+        uint256 maxUtilizationLiquidity =
+            (totalLiquidity * Constants.MAX_UTILIZATION_PERCENTAGE) / Constants.BASIS_POINT_DIVISOR;
 
         // Adjust available liquidity based on total open interest
         uint256 availableLiquidity =

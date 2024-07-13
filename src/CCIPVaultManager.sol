@@ -10,6 +10,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IVault} from "./interfaces/IVault.sol";
 import {ICCIPVaultManager} from "./interfaces/ICCIPVaultManager.sol";
+import {Constants} from "./libraries/Constants.sol";
 
 contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
     /*//////////////////////////////////////////////////////////////
@@ -33,6 +34,10 @@ contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
     IERC20 internal immutable i_usdc;
     /// @dev Vault contract native to this protocol
     IVault internal immutable i_vault;
+
+    /// @dev These are updated only by _ccipReceive
+    uint256 internal s_totalOpenInterestLongInToken;
+    uint256 internal s_totalOpenInterestShortInUsd; // scaled to 1e18, not scaled to usdc
 
     /// @dev CCIPPositionsManager native to this protocol we are sending to and receiving from via ccip
     address internal s_positionsManager;
@@ -74,14 +79,55 @@ contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
             revert CCIPVaultManager__WrongSourceChain(_message.sourceChainSelector);
         }
 
-        /**
-         * receives:
-         *     uint256 _usdcAmount,
-         *     uint256 _openInterestLongInToken,
-         *     uint256 _openInterestShortInUsd,
-         *     bool _increaseLongInToken,
-         *     bool _increaseShortInUsd
-         */
+        (
+            uint256 _usdcAmount,
+            uint256 _openInterestLongInToken,
+            uint256 _openInterestShortInUsd,
+            bool _increaseLongInToken,
+            bool _increaseShortInUsd
+        ) = abi.decode(_message.data, (uint256, uint256, uint256, bool, bool));
+
+        if (_increaseLongInToken) {
+            s_totalOpenInterestLongInToken += _openInterestLongInToken;
+        } else if (_openInterestLongInToken > 0) {
+            s_totalOpenInterestLongInToken -= _openInterestLongInToken;
+        }
+
+        if (_increaseShortInUsd) {
+            s_totalOpenInterestShortInUsd += _openInterestShortInUsd;
+        } else if (_openInterestShortInUsd > 0) {
+            s_totalOpenInterestShortInUsd -= _openInterestShortInUsd;
+        }
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                                 GETTER
+    //////////////////////////////////////////////////////////////*/
+    /// @dev Returns the latest price for the speculated asset
+    function getLatestPrice() public view returns (uint256) {
+        (, int256 price,,,) = i_priceFeed.latestRoundData();
+        return uint256(price) * Constants.SCALING_FACTOR;
+    }
+
+    /// @dev Returns the available liquidity of the protocol, excluding any collateral or reserved profits
+    function getAvailableLiquidity() public view returns (uint256) {
+        // Total assets in the vault
+        uint256 totalLiquidity = i_vault.totalAssets();
+
+        // Calculate and scale the total open interest
+        uint256 totalOpenInterestLong = (s_totalOpenInterestLongInToken * getLatestPrice()) / Constants.WAD_PRECISION;
+        uint256 totalOpenInterest = totalOpenInterestLong + s_totalOpenInterestShortInUsd;
+        uint256 totalOpenInterestScaled = _scaleToUSDC(totalOpenInterest);
+
+        // Calculate max utilization liquidity
+        uint256 maxUtilizationLiquidity =
+            (totalLiquidity * Constants.MAX_UTILIZATION_PERCENTAGE) / Constants.BASIS_POINT_DIVISOR;
+
+        // Adjust available liquidity based on total open interest
+        uint256 availableLiquidity =
+            maxUtilizationLiquidity > totalOpenInterestScaled ? maxUtilizationLiquidity - totalOpenInterestScaled : 0;
+
+        return availableLiquidity;
     }
 
     /*//////////////////////////////////////////////////////////////
