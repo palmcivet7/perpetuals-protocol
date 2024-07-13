@@ -5,7 +5,7 @@ pragma solidity 0.8.24;
 import {ERC4626} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import {IERC20, ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IVault} from "./interfaces/IVault.sol";
-import {IPositions} from "./interfaces/IPositions.sol";
+import {ICCIPVaultManager, CCIPVaultManager} from "./CCIPVaultManager.sol";
 
 contract Vault is IVault, ERC4626 {
     /*//////////////////////////////////////////////////////////////
@@ -14,29 +14,53 @@ contract Vault is IVault, ERC4626 {
     error Vault__InsufficientLiquidity();
     error Vault__PublicMintDisabled();
     error Vault__PublicRedeemDisabled();
-    error Vault__OnlyPositions();
+    error Vault__OnlyVaultManager();
+    error Vault__NoZeroAddress();
 
     /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
-    IPositions internal immutable i_positions;
+    ICCIPVaultManager internal immutable i_ccipVaultManager;
+
+    /*//////////////////////////////////////////////////////////////
+                               MODIFIERS
+    //////////////////////////////////////////////////////////////*/
+    modifier revertIfZeroAddress(address _address) {
+        if (_address == address(0)) revert Vault__NoZeroAddress();
+        _;
+    }
 
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
-    constructor(address _positions, address _usdc) ERC4626(IERC20(_usdc)) ERC20("Vault USDC", "vUSDC") {
-        i_positions = IPositions(_positions);
+    constructor(address _router, address _link, address _usdc, address _priceFeed)
+        ERC4626(IERC20(_usdc))
+        ERC20("Vault USDC", "vUSDC")
+        revertIfZeroAddress(_router)
+        revertIfZeroAddress(_link)
+        revertIfZeroAddress(_usdc)
+        revertIfZeroAddress(_priceFeed)
+    {
+        i_ccipVaultManager = ICCIPVaultManager(new CCIPVaultManager(_router, _link, _usdc, _priceFeed, address(this)));
     }
 
     /*//////////////////////////////////////////////////////////////
                        PUBLIC/EXTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
+    /// @dev When a deposit is made, we have to send a message across chains so our Perpetual positions contract
+    /// is aware of the current amount of deposited liquidity we have.
+    function deposit(uint256 assets, address receiver) public override(ERC4626) returns (uint256) {
+        uint256 shares = super.deposit(assets, receiver);
+        i_ccipVaultManager.ccipSend(assets, true, 0, address(0));
+        return shares;
+    }
+
     function withdraw(uint256 assets, address receiver, address owner)
         public
         override(ERC4626, IVault)
         returns (uint256)
     {
-        uint256 availableLiquidity = i_positions.getAvailableLiquidity();
+        uint256 availableLiquidity = i_ccipVaultManager.getAvailableLiquidity();
         if (assets > availableLiquidity) revert Vault__InsufficientLiquidity();
 
         return super.withdraw(assets, receiver, owner);
@@ -44,8 +68,8 @@ contract Vault is IVault, ERC4626 {
 
     /// @dev Only callable by the Positions contract
     function approve(uint256 _amount) external {
-        if (msg.sender != address(i_positions)) revert Vault__OnlyPositions();
-        IERC20(asset()).approve(address(i_positions), _amount);
+        if (msg.sender != address(i_ccipVaultManager)) revert Vault__OnlyVaultManager();
+        IERC20(asset()).approve(address(i_ccipVaultManager), _amount);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -53,7 +77,7 @@ contract Vault is IVault, ERC4626 {
     //////////////////////////////////////////////////////////////*/
     /// @notice Override maxWithdraw function to consider available liquidity
     function maxWithdraw(address owner) public view override(ERC4626, IVault) returns (uint256) {
-        uint256 availableLiquidity = i_positions.getAvailableLiquidity();
+        uint256 availableLiquidity = i_ccipVaultManager.getAvailableLiquidity();
         uint256 maxAssets = super.maxWithdraw(owner);
 
         return availableLiquidity < maxAssets ? availableLiquidity : maxAssets;

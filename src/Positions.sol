@@ -123,7 +123,7 @@ contract Positions is IPositions, ReentrancyGuard {
     constructor(address _priceFeed, address _usdc) revertIfZeroAddress(_priceFeed) revertIfZeroAddress(_usdc) {
         i_priceFeed = AggregatorV3Interface(_priceFeed);
         i_usdc = IERC20(_usdc);
-        i_vault = IVault(new Vault(address(this), _usdc));
+        // i_vault = IVault(new Vault(address(this), _usdc));
     }
 
     /*//////////////////////////////////////////////////////////////
