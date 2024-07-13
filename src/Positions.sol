@@ -7,7 +7,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {SignedMath} from "@openzeppelin/contracts/utils/math/SignedMath.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import {IPositions} from "./interfaces/IPositions.sol";
-import {IVault, Vault} from "./Vault.sol";
+import {ICCIPPositionsManager, CCIPPositionsManager} from "./CCIPPositionsManager.sol";
 import {Constants} from "./libraries/Constants.sol";
 import {Utils} from "./libraries/Utils.sol";
 
@@ -35,33 +35,12 @@ contract Positions is IPositions, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
-    // uint256 internal constant PRICE_FEED_PRECISION = 10 ** 8; // 1e8
-    // uint256 internal constant WAD_PRECISION = 10 ** 18; // 1e18
-    // uint256 internal constant SCALING_FACTOR = WAD_PRECISION / PRICE_FEED_PRECISION;
-    // uint256 internal constant USDC_PRECISION = 10 ** 6; // 1e6
-    // /// @dev The size of a position can be 20x the collateral, but exceeding this results in liquidation
-    // uint256 internal constant MAX_LEVERAGE = 20;
-    // /// @dev Traders cannot utilize more than a configured percentage of the deposited liquidity
-    // uint256 internal constant MAX_UTILIZATION_PERCENTAGE = 8000;
-    // uint256 internal constant BASIS_POINT_DIVISOR = 10000;
-    // uint256 internal constant LIQUIDATION_BONUS = 2000;
-    // int256 internal constant INT_PRECISION = 10 ** 18;
-
     /// @dev Chainlink PriceFeed for the token being speculated on
     AggregatorV3Interface internal immutable i_priceFeed;
     /// @dev USDC is the token used for liquidity and collateral
     IERC20 internal immutable i_usdc;
-    /// @dev The system's native Vault
-    IVault internal immutable i_vault;
-
-    struct Position {
-        address trader;
-        uint256 sizeInToken;
-        uint256 sizeInUsd;
-        uint256 collateralAmount;
-        uint256 openPrice;
-        bool isLong;
-    }
+    /// @dev Contract that handles crosschain messaging
+    ICCIPPositionsManager internal immutable i_ccipPositionsManager;
 
     /// @dev Maps position ID to a position
     mapping(uint256 positionId => Position position) internal s_position;
@@ -120,10 +99,14 @@ contract Positions is IPositions, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
-    constructor(address _priceFeed, address _usdc) revertIfZeroAddress(_priceFeed) revertIfZeroAddress(_usdc) {
+    constructor(address _router, address _link, address _usdc, address _priceFeed)
+        revertIfZeroAddress(_priceFeed)
+        revertIfZeroAddress(_usdc)
+    {
         i_priceFeed = AggregatorV3Interface(_priceFeed);
         i_usdc = IERC20(_usdc);
-        // i_vault = IVault(new Vault(address(this), _usdc));
+        i_ccipPositionsManager =
+            ICCIPPositionsManager(new CCIPPositionsManager(_router, _link, _usdc, address(this), msg.sender));
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -156,8 +139,8 @@ contract Positions is IPositions, ReentrancyGuard {
             positionId, msg.sender, _sizeInTokenAmount, sizeInUsd, _collateralAmount, currentPrice, _isLong
         );
 
-        /// @dev transfer usdc from trader to vault
-        i_usdc.safeTransferFrom(msg.sender, address(i_vault), _collateralAmount);
+        /// @dev transfer usdc from trader to ccipPositionsManager
+        i_usdc.safeTransferFrom(msg.sender, address(i_ccipPositionsManager), _collateralAmount);
     }
 
     /// @dev The position trader can call this to increase the size of their position
@@ -202,7 +185,7 @@ contract Positions is IPositions, ReentrancyGuard {
 
         emit PositionCollateralIncreased(_positionId, position.collateralAmount + _collateralAmountToIncrease);
 
-        i_usdc.safeTransferFrom(msg.sender, address(i_vault), _collateralAmountToIncrease);
+        i_usdc.safeTransferFrom(msg.sender, address(i_ccipPositionsManager), _collateralAmountToIncrease);
     }
 
     /// @notice Only the position trader can call this to decrease the size of their position
@@ -240,8 +223,8 @@ contract Positions is IPositions, ReentrancyGuard {
             s_position[_positionId].sizeInUsd -= sizeInUsd;
 
             // Transfer the realized PnL to the trader
-            i_vault.approve(positiveRealisedPnlScaledToUsdc);
-            i_usdc.safeTransferFrom(address(i_vault), msg.sender, positiveRealisedPnlScaledToUsdc);
+            i_ccipPositionsManager.approve(positiveRealisedPnlScaledToUsdc);
+            i_usdc.safeTransferFrom(address(i_ccipPositionsManager), msg.sender, positiveRealisedPnlScaledToUsdc);
         } else if (realisedPnl < 0) {
             // If the realized PnL is negative, convert to unsigned int and scale to USDC precision
             uint256 negativeRealisedPnl = uint256(realisedPnl.abs());
@@ -276,8 +259,8 @@ contract Positions is IPositions, ReentrancyGuard {
             emit PositionClosed(_positionId, msg.sender, realisedPnl);
 
             // Transfer remaining collateral back to the trader
-            i_vault.approve(collateral);
-            i_usdc.safeTransferFrom(address(i_vault), msg.sender, collateral);
+            i_ccipPositionsManager.approve(collateral);
+            i_usdc.safeTransferFrom(address(i_ccipPositionsManager), msg.sender, collateral);
         } else if (s_position[_positionId].sizeInToken == 0) {
             emit PositionClosed(_positionId, msg.sender, realisedPnl);
         } else {
@@ -304,8 +287,8 @@ contract Positions is IPositions, ReentrancyGuard {
         if (_isMaxLeverageExceeded(_positionId)) revert Positions__MaxLeverageExceeded();
         emit PositionCollateralDecreased(_positionId, position.collateralAmount - _collateralAmountToDecrease);
 
-        i_vault.approve(_collateralAmountToDecrease);
-        i_usdc.safeTransferFrom(address(i_vault), msg.sender, _collateralAmountToDecrease);
+        i_ccipPositionsManager.approve(_collateralAmountToDecrease);
+        i_usdc.safeTransferFrom(address(i_ccipPositionsManager), msg.sender, _collateralAmountToDecrease);
     }
 
     /// @notice Anyone can call this to liquidate and close an over leveraged position
@@ -339,8 +322,8 @@ contract Positions is IPositions, ReentrancyGuard {
             // calculate 20% of position.collateralAmount
             uint256 liquidationReward =
                 (remainingCollateral * Constants.LIQUIDATION_BONUS) / Constants.BASIS_POINT_DIVISOR;
-            i_vault.approve(liquidationReward);
-            i_usdc.safeTransferFrom(address(i_vault), msg.sender, liquidationReward);
+            i_ccipPositionsManager.approve(liquidationReward);
+            i_usdc.safeTransferFrom(address(i_ccipPositionsManager), msg.sender, liquidationReward);
         }
     }
 
@@ -426,7 +409,7 @@ contract Positions is IPositions, ReentrancyGuard {
     /// @dev Returns the available liquidity of the protocol, excluding any collateral or reserved profits
     function getAvailableLiquidity() public view returns (uint256) {
         // Total assets in the vault
-        uint256 totalLiquidity = i_vault.totalAssets();
+        uint256 totalLiquidity = i_ccipPositionsManager.getTotalLiquidity();
 
         // Calculate and scale the total open interest
         uint256 totalOpenInterestLong = (s_totalOpenInterestLongInToken * getLatestPrice()) / Constants.WAD_PRECISION;
@@ -442,10 +425,6 @@ contract Positions is IPositions, ReentrancyGuard {
             maxUtilizationLiquidity > totalOpenInterestScaled ? maxUtilizationLiquidity - totalOpenInterestScaled : 0;
 
         return availableLiquidity;
-    }
-
-    function getVault() external view returns (IVault) {
-        return i_vault;
     }
 
     function getPositionData(uint256 _positionId)

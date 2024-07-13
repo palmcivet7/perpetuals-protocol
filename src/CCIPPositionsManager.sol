@@ -74,8 +74,8 @@ contract CCIPPositionsManager is ICCIPPositionsManager, Ownable, CCIPReceiver {
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
-    constructor(address _router, address _link, address _usdc, address _positions)
-        Ownable(msg.sender)
+    constructor(address _router, address _link, address _usdc, address _positions, address _owner)
+        Ownable(_owner)
         CCIPReceiver(_router)
     {
         i_link = LinkTokenInterface(_link);
@@ -186,6 +186,18 @@ contract CCIPPositionsManager is ICCIPPositionsManager, Ownable, CCIPReceiver {
 
         // Interactions: Sends any profit to profit recipient
         if (_profitAmount > 0) i_usdc.safeTransfer(_profitRecipient, _profitAmount);
+    }
+
+    /// @notice Only callable by the Positions contract
+    function approve(uint256 _amount) external onlyPositions {
+        IERC20(i_usdc).approve(address(i_positions), _amount);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                                 GETTER
+    //////////////////////////////////////////////////////////////*/
+    function getTotalLiquidity() external view returns (uint256) {
+        return s_totalLiquidity;
     }
 
     /*//////////////////////////////////////////////////////////////
