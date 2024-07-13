@@ -24,6 +24,8 @@ contract Positions is IPositions, ReentrancyGuard {
     error Positions__MaxLeverageExceeded();
     error Positions__OnlyTrader();
     error Positions__InvalidPosition();
+    error Positions__InvalidPositionSize();
+    error Positions__InsufficientLiquidity();
 
     /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
@@ -81,8 +83,12 @@ contract Positions is IPositions, ReentrancyGuard {
     event PositionSizeIncreased(
         uint256 indexed positionId, uint256 indexed newSizeInToken, uint256 indexed newSizeInUsd
     );
+    event PositionSizeDecreased(
+        uint256 indexed positionId, uint256 indexed newSizeInToken, uint256 indexed newSizeInUsd
+    );
     event PositionCollateralIncreased(uint256 indexed positionId, uint256 indexed newCollateralAmount);
     event PositionCollateralDecreased(uint256 indexed positionId, uint256 indexed newCollateralAmount);
+    event PositionClosed(uint256 indexed positionId, address indexed trader, int256 indexed pnl);
 
     /*//////////////////////////////////////////////////////////////
                                MODIFIERS
@@ -194,7 +200,86 @@ contract Positions is IPositions, ReentrancyGuard {
 
     /// @notice Only the position trader can call this to decrease the size of their position
     /// @notice If a position size is decreased to 0, the position will be closed
-    function decreaseSize() external {}
+    function decreaseSize(uint256 _positionId, uint256 _sizeInTokenAmountToDecrease)
+        external
+        revertIfPositionInvalid(_positionId)
+        revertIfZeroAmount(_sizeInTokenAmountToDecrease)
+        nonReentrant
+    {
+        Position memory position = s_position[_positionId];
+        if (msg.sender != position.trader) revert Positions__OnlyTrader();
+        if (_sizeInTokenAmountToDecrease > position.sizeInToken) revert Positions__InvalidPositionSize();
+
+        uint256 sizeInUsd = (position.sizeInUsd * _sizeInTokenAmountToDecrease) / position.sizeInToken;
+        _decreaseTotalOpenInterest(_sizeInTokenAmountToDecrease, sizeInUsd, position.isLong);
+
+        // Get the current PnL of the position
+        int256 pnl = getPositionPnl(_positionId);
+        // Calculate the realized PnL based on the decrease in size
+        int256 realisedPnl = (pnl * int256(_sizeInTokenAmountToDecrease)) / int256(position.sizeInToken);
+
+        uint256 collateral = position.collateralAmount;
+
+        if (realisedPnl > 0) {
+            // If the realized PnL is positive, convert to unsigned int
+            uint256 positiveRealisedPnl = uint256(realisedPnl);
+            uint256 positiveRealisedPnlScaledToUsdc = _scaleToUSDC(positiveRealisedPnl);
+
+            // Check if there is enough liquidity in the vault to pay the PnL
+            uint256 availableLiquidity = getAvailableLiquidity();
+            if (positiveRealisedPnlScaledToUsdc > availableLiquidity) revert Positions__InsufficientLiquidity();
+
+            // Decrease the size of the position
+            s_position[_positionId].sizeInToken -= _sizeInTokenAmountToDecrease;
+            s_position[_positionId].sizeInUsd -= sizeInUsd;
+
+            // Transfer the realized PnL to the trader
+            i_vault.approve(positiveRealisedPnlScaledToUsdc);
+            i_usdc.safeTransferFrom(address(i_vault), msg.sender, positiveRealisedPnlScaledToUsdc);
+        } else if (realisedPnl < 0) {
+            // If the realized PnL is negative, convert to unsigned int and scale to USDC precision
+            uint256 negativeRealisedPnl = uint256(realisedPnl.abs());
+            uint256 negativeRealisedPnlScaledToUsdc = _scaleToUSDC(negativeRealisedPnl);
+
+            if (collateral > negativeRealisedPnlScaledToUsdc) {
+                // Deduct the realized loss from the collateral if there is enough
+                s_position[_positionId].collateralAmount -= negativeRealisedPnlScaledToUsdc;
+                s_totalCollateral -= negativeRealisedPnlScaledToUsdc;
+
+                // Decrease the size of the position
+                s_position[_positionId].sizeInToken -= _sizeInTokenAmountToDecrease;
+                s_position[_positionId].sizeInUsd -= sizeInUsd;
+            } else {
+                // Set the collateral to zero if the realized loss exceeds it
+                s_totalCollateral -= collateral;
+                s_position[_positionId].collateralAmount = 0;
+
+                // Decrease the size of the position
+                s_position[_positionId].sizeInToken = 0;
+                s_position[_positionId].sizeInUsd = 0;
+            }
+        } else if (realisedPnl == 0) {
+            s_position[_positionId].sizeInToken -= _sizeInTokenAmountToDecrease;
+            s_position[_positionId].sizeInUsd -= sizeInUsd;
+        }
+
+        if (position.sizeInToken == _sizeInTokenAmountToDecrease && realisedPnl >= 0) {
+            // If the position size is zero, mark the position as closed and emit the PositionClosed event
+            s_totalCollateral -= collateral;
+            s_position[_positionId].collateralAmount = 0;
+            emit PositionClosed(_positionId, msg.sender, realisedPnl);
+
+            // Transfer remaining collateral back to the trader
+            i_vault.approve(collateral);
+            i_usdc.safeTransferFrom(address(i_vault), msg.sender, collateral);
+        } else if (s_position[_positionId].sizeInToken == 0) {
+            emit PositionClosed(_positionId, msg.sender, realisedPnl);
+        } else {
+            emit PositionSizeDecreased(
+                _positionId, position.sizeInToken - _sizeInTokenAmountToDecrease, position.sizeInUsd - sizeInUsd
+            );
+        }
+    }
 
     /// @dev Only the position trader can call this to decrease the collateral of their position
     function decreaseCollateral(uint256 _positionId, uint256 _collateralAmountToDecrease)
@@ -254,6 +339,16 @@ contract Positions is IPositions, ReentrancyGuard {
         } else {
             s_totalOpenInterestShortInToken += _sizeInToken;
             s_totalOpenInterestShortInUsd += _sizeInUsd;
+        }
+    }
+
+    function _decreaseTotalOpenInterest(uint256 _sizeInToken, uint256 _sizeInUsd, bool _isLong) internal {
+        if (_isLong) {
+            s_totalOpenInterestLongInToken -= _sizeInToken;
+            s_totalOpenInterestLongInUsd -= _sizeInUsd;
+        } else {
+            s_totalOpenInterestShortInToken -= _sizeInToken;
+            s_totalOpenInterestShortInUsd -= _sizeInUsd;
         }
     }
 
@@ -329,5 +424,9 @@ contract Positions is IPositions, ReentrancyGuard {
             position.openPrice,
             position.isLong
         );
+    }
+
+    function getTotalCollateral() external view returns (uint256) {
+        return s_totalCollateral;
     }
 }

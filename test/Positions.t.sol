@@ -7,8 +7,11 @@ import {Positions, IPositions} from "../src/Positions.sol";
 import {Vault, IVault} from "../src/Vault.sol";
 import {MockV3Aggregator} from "./mocks/MockV3Aggregator.sol";
 import {MockUsdc} from "./mocks/MockUsdc.sol";
+import {SignedMath} from "@openzeppelin/contracts/utils/math/SignedMath.sol";
 
 contract PositionsTest is Test {
+    using SignedMath for int256;
+
     Positions positions;
     Vault vault;
     MockV3Aggregator priceFeed;
@@ -192,5 +195,133 @@ contract PositionsTest is Test {
         vm.expectRevert(Positions.Positions__MaxLeverageExceeded.selector);
         positions.decreaseCollateral(1, FIFTY_USDC);
         vm.stopPrank();
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                      DECREASE SIZE/CLOSE POSITION
+    //////////////////////////////////////////////////////////////*/
+    function test_decreaseSize_no_pnl() public liquidityDeposited {
+        uint256 sizeInTokenAmount = 0.5 ether;
+
+        vm.startPrank(trader);
+        usdc.approve(address(positions), FIFTY_USDC);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+
+        (, uint256 sizeInTokenStart,,,,) = positions.getPositionData(1);
+        assertEq(sizeInTokenStart, sizeInTokenAmount);
+        uint256 startingBalance = usdc.balanceOf(trader);
+
+        uint256 sizeToDecrease = 0.5 ether;
+        positions.decreaseSize(1, sizeToDecrease);
+
+        vm.stopPrank();
+
+        (, uint256 sizeInTokenEnd,,,,) = positions.getPositionData(1);
+
+        assertEq(sizeInTokenEnd, 0);
+        uint256 endingBalance = usdc.balanceOf(trader);
+        assertEq(endingBalance, startingBalance + FIFTY_USDC);
+    }
+
+    function test_close_position_in_profit() public liquidityDeposited {
+        uint256 sizeInTokenAmount = 0.01 ether;
+
+        vm.startPrank(trader);
+        usdc.approve(address(positions), FIFTY_USDC);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+
+        (, uint256 sizeInTokenStart,,,,) = positions.getPositionData(1);
+        assertEq(sizeInTokenStart, sizeInTokenAmount);
+        uint256 startingBalance = usdc.balanceOf(trader);
+        uint256 startingTotalCollateral = positions.getTotalCollateral();
+
+        priceFeed.updateAnswer(7000_00000000);
+
+        uint256 sizeToDecrease = 0.01 ether;
+        positions.decreaseSize(1, sizeToDecrease);
+
+        vm.stopPrank();
+
+        (, uint256 sizeInTokenEnd,,,,) = positions.getPositionData(1);
+        uint256 endingBalance = usdc.balanceOf(trader);
+        uint256 endingTotalCollateral = positions.getTotalCollateral();
+        assertEq(sizeInTokenEnd, 0);
+        assertEq(endingBalance, startingBalance + (FIFTY_USDC * 2));
+        assertLt(endingTotalCollateral, startingTotalCollateral);
+    }
+
+    function test_decreaseSize_in_profit() public liquidityDeposited {
+        uint256 sizeInTokenAmount = 0.02 ether;
+
+        vm.startPrank(trader);
+        usdc.approve(address(positions), FIFTY_USDC);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+
+        (, uint256 sizeInTokenStart,,,,) = positions.getPositionData(1);
+        assertEq(sizeInTokenStart, sizeInTokenAmount);
+        uint256 startingBalance = usdc.balanceOf(trader);
+
+        priceFeed.updateAnswer(3000_00000000);
+
+        uint256 sizeToDecrease = 0.01 ether;
+        positions.decreaseSize(1, sizeToDecrease);
+        vm.stopPrank();
+
+        (, uint256 sizeInTokenEnd,,,,) = positions.getPositionData(1);
+        uint256 endingBalance = usdc.balanceOf(trader);
+
+        assertEq(sizeInTokenEnd, sizeInTokenStart - sizeToDecrease);
+        assertEq(endingBalance, startingBalance + (FIFTY_USDC / 5));
+    }
+
+    function test_close_position_in_loss() public liquidityDeposited {
+        uint256 sizeInTokenAmount = 0.5 ether;
+
+        vm.startPrank(trader);
+        usdc.approve(address(positions), FIFTY_USDC);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+
+        uint256 startingBalance = usdc.balanceOf(trader);
+
+        priceFeed.updateAnswer(1000_00000000);
+
+        positions.decreaseSize(1, sizeInTokenAmount);
+        vm.stopPrank();
+
+        (, uint256 sizeInTokenEnd,,,,) = positions.getPositionData(1);
+        uint256 endingBalance = usdc.balanceOf(trader);
+        assertEq(sizeInTokenEnd, 0);
+        assertEq(endingBalance, startingBalance);
+    }
+
+    function test_decreaseSize_in_loss() public liquidityDeposited {
+        uint256 sizeInTokenAmount = 0.5 ether;
+
+        vm.startPrank(trader);
+        usdc.approve(address(positions), FIFTY_USDC);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+
+        uint256 startingBalance = usdc.balanceOf(trader);
+
+        priceFeed.updateAnswer(1700_00000000);
+
+        (, uint256 sizeInToken,, uint256 collateralStart,,) = positions.getPositionData(1);
+
+        uint256 sizeToDecrease = 0.01 ether;
+
+        int256 pnl = positions.getPositionPnl(1);
+        int256 realisedPnl = (pnl * int256(sizeToDecrease)) / int256(sizeInToken);
+        uint256 negativeRealisedPnl = uint256(realisedPnl.abs());
+        uint256 negativeRealisedPnlScaledToUsdc = negativeRealisedPnl / (1e18 / 1e6);
+
+        positions.decreaseSize(1, sizeToDecrease);
+        vm.stopPrank();
+
+        (, uint256 sizeInTokenEnd,, uint256 collateralEnd,,) = positions.getPositionData(1);
+        uint256 endingBalance = usdc.balanceOf(trader);
+
+        assertGt(sizeInTokenEnd, 0);
+        assertEq(collateralEnd, collateralStart - negativeRealisedPnlScaledToUsdc);
+        assertEq(endingBalance, startingBalance);
     }
 }
