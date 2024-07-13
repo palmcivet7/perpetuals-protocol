@@ -21,6 +21,8 @@ contract CCIPPositionsManager is ICCIPPositionsManager, Ownable, CCIPReceiver {
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
     error CCIPPositionsManager__OnlyVault();
+    error CCIPPositionsManager__WrongSender(address wrongSender);
+    error CCIPPositionsManager__WrongSourceChain(uint64 wrongChainSelector);
 
     /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
@@ -32,10 +34,20 @@ contract CCIPPositionsManager is ICCIPPositionsManager, Ownable, CCIPReceiver {
     /// @dev Positions contract native to this protocol
     IPositions internal immutable i_positions;
 
+    /// @dev Only updated by _ccipReceive
+    uint256 internal s_totalLiquidity;
+
     /// @dev CCIPVaultManager native to this protocol we are sending to and receiving from via ccip
     address internal s_vaultManager;
     /// @dev Chain selector we are sending to and receiving from via ccip
     uint64 internal s_vaultManagerChainSelector;
+
+    /*//////////////////////////////////////////////////////////////
+                                 EVENTS
+    //////////////////////////////////////////////////////////////*/
+    event PositionsMessageReceived(
+        uint256 _liquidityAmount, bool _isDeposit, uint256 _profitAmount, address _profitRecipient
+    );
 
     /*//////////////////////////////////////////////////////////////
                                MODIFIERS
@@ -69,9 +81,32 @@ contract CCIPPositionsManager is ICCIPPositionsManager, Ownable, CCIPReceiver {
     ) external onlyPositions {
         address receiver = s_vaultManager;
         uint64 destinationChainSelector = s_vaultManagerChainSelector;
+
+        Client.EVM2AnyMessage memory evm2AnyMessage;
     }
 
-    function _ccipReceive(Client.Any2EVMMessage memory message) internal override {}
+    function _ccipReceive(Client.Any2EVMMessage memory _message) internal override {
+        /// @dev revert if sender or source chain is not what we allowed
+        address expectedSender = s_vaultManager;
+        address sender = abi.decode(_message.sender, (address));
+        if (sender != expectedSender) revert CCIPPositionsManager__WrongSender(sender);
+        uint64 expectedSourceChainSelector = s_vaultManagerChainSelector;
+        if (_message.sourceChainSelector != expectedSourceChainSelector) {
+            revert CCIPPositionsManager__WrongSourceChain(_message.sourceChainSelector);
+        }
+
+        (uint256 _liquidityAmount, bool _isDeposit, uint256 _profitAmount, address _profitRecipient) =
+            abi.decode(_message.data, (uint256, bool, uint256, address));
+
+        // Effects: Updates s_totalLiquidity
+        if (_isDeposit) s_totalLiquidity += _liquidityAmount;
+        if (!_isDeposit) s_totalLiquidity -= _liquidityAmount;
+
+        emit PositionsMessageReceived(_liquidityAmount, _isDeposit, _profitAmount, _profitRecipient);
+
+        // Interactions: Sends any profit to profit recipient
+        if (_profitAmount > 0) i_usdc.safeTransfer(_profitRecipient, _profitAmount);
+    }
 
     /*//////////////////////////////////////////////////////////////
                                  SETTER

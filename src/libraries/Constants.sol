@@ -14,4 +14,5 @@ library Constants {
     uint256 internal constant BASIS_POINT_DIVISOR = 10000;
     uint256 internal constant LIQUIDATION_BONUS = 2000;
     int256 internal constant INT_PRECISION = 10 ** 18;
+    uint256 internal constant CCIP_GAS_LIMIT = 500_000;
 }

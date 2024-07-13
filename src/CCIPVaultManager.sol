@@ -27,6 +27,7 @@ contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
     error CCIPVaultManager__OnlyVault();
     error CCIPVaultManager__WrongSender(address wrongSender);
     error CCIPVaultManager__WrongSourceChain(uint64 wrongChainSelector);
+    error CCIPVaultManager__InsufficientLinkBalance(uint256 balance, uint256 fees);
 
     /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
@@ -48,6 +49,18 @@ contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
     address internal s_positionsManager;
     /// @dev Chain selector we are sending to and receiving from via ccip
     uint64 internal s_positionsManagerChainSelector;
+
+    /*//////////////////////////////////////////////////////////////
+                                 EVENTS
+    //////////////////////////////////////////////////////////////*/
+    event VaultMessageSent(
+        bytes32 indexed messageId,
+        uint256 indexed liquidityAmount,
+        bool indexed isDeposit,
+        uint256 profitAmount,
+        address profitRecipient,
+        uint256 fees
+    );
 
     /*//////////////////////////////////////////////////////////////
                                MODIFIERS
@@ -73,7 +86,62 @@ contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
     /*//////////////////////////////////////////////////////////////
                                   CCIP
     //////////////////////////////////////////////////////////////*/
-    function ccipSend() external onlyVault {}
+    /// @param _liquidityAmount The amount of liquidity that has been deposited or withdrawn
+    /// @param _isDeposit True if liquidity deposited, false if withdrawn
+    /// @param _profitAmount The amount of USDC profit being sent to recipient
+    /// @param _profitRecipient Recipient of profit being sent (if any)
+    /// @notice if _profitAmount is 0, _profitRecipient should be address(0)
+    /// @notice if _profitAmount > 0, _isDeposit should be false and _liquidityAmount should be same as _profitAmount
+    function ccipSend(uint256 _liquidityAmount, bool _isDeposit, uint256 _profitAmount, address _profitRecipient)
+        external
+        onlyVault
+    {
+        address receiver = s_positionsManager;
+        uint64 destinationChainSelector = s_positionsManagerChainSelector;
+
+        Client.EVM2AnyMessage memory evm2AnyMessage;
+
+        if (_profitAmount > 0) {
+            i_vault.approve(_profitAmount);
+            i_usdc.safeTransferFrom(address(i_vault), address(this), _profitAmount);
+
+            Client.EVMTokenAmount[] memory tokenAmounts = new Client.EVMTokenAmount[](1);
+            tokenAmounts[0] = Client.EVMTokenAmount({token: address(i_usdc), amount: _profitAmount});
+
+            evm2AnyMessage = Client.EVM2AnyMessage({
+                receiver: abi.encode(receiver),
+                data: abi.encode(_liquidityAmount, _isDeposit, _profitAmount, _profitRecipient),
+                tokenAmounts: tokenAmounts,
+                extraArgs: Client._argsToBytes(Client.EVMExtraArgsV1({gasLimit: Constants.CCIP_GAS_LIMIT})),
+                feeToken: address(i_link)
+            });
+
+            i_usdc.approve(i_ccipRouter, _profitAmount);
+        } else {
+            // dont send tokenAmounts
+            evm2AnyMessage = Client.EVM2AnyMessage({
+                receiver: abi.encode(receiver),
+                data: abi.encode(_liquidityAmount, _isDeposit, _profitAmount, _profitRecipient),
+                tokenAmounts: new Client.EVMTokenAmount[](0),
+                extraArgs: Client._argsToBytes(Client.EVMExtraArgsV1({gasLimit: Constants.CCIP_GAS_LIMIT})),
+                feeToken: address(i_link)
+            });
+        }
+
+        uint256 fees = IRouterClient(i_ccipRouter).getFee(destinationChainSelector, evm2AnyMessage);
+        if (fees > i_link.balanceOf(address(this))) {
+            revert CCIPVaultManager__InsufficientLinkBalance(i_link.balanceOf(address(this)), fees);
+        }
+
+        // approve the Router to transfer LINK tokens on contract's behalf. It will spend the fees in LINK
+        i_link.approve(address(i_ccipRouter), fees);
+
+        // Send the message through the router and store the returned message ID
+        bytes32 messageId = IRouterClient(i_ccipRouter).ccipSend(destinationChainSelector, evm2AnyMessage);
+
+        // emit messageSent event
+        emit VaultMessageSent(messageId, _liquidityAmount, _isDeposit, _profitAmount, _profitRecipient, fees);
+    }
 
     function _ccipReceive(Client.Any2EVMMessage memory _message) internal override {
         /// @dev revert if sender or source chain is not what we allowed
