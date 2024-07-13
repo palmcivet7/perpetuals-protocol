@@ -8,4 +8,6 @@ interface IVault {
     function withdraw(uint256 assets, address receiver, address owner) external returns (uint256);
 
     function maxWithdraw(address owner) external returns (uint256);
+
+    function approve(uint256 _amount) external;
 }

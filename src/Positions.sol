@@ -82,6 +82,7 @@ contract Positions is IPositions, ReentrancyGuard {
         uint256 indexed positionId, uint256 indexed newSizeInToken, uint256 indexed newSizeInUsd
     );
     event PositionCollateralIncreased(uint256 indexed positionId, uint256 indexed newCollateralAmount);
+    event PositionCollateralDecreased(uint256 indexed positionId, uint256 indexed newCollateralAmount);
 
     /*//////////////////////////////////////////////////////////////
                                MODIFIERS
@@ -191,9 +192,32 @@ contract Positions is IPositions, ReentrancyGuard {
         i_usdc.safeTransferFrom(msg.sender, address(i_vault), _collateralAmountToIncrease);
     }
 
+    /// @notice Only the position trader can call this to decrease the size of their position
+    /// @notice If a position size is decreased to 0, the position will be closed
     function decreaseSize() external {}
 
-    function decreaseCollateral() external {}
+    /// @dev Only the position trader can call this to decrease the collateral of their position
+    function decreaseCollateral(uint256 _positionId, uint256 _collateralAmountToDecrease)
+        external
+        revertIfPositionInvalid(_positionId)
+        revertIfZeroAmount(_collateralAmountToDecrease)
+        nonReentrant
+    {
+        Position memory position = s_position[_positionId];
+        if (msg.sender != position.trader) revert Positions__OnlyTrader();
+
+        s_position[_positionId].collateralAmount -= _collateralAmountToDecrease;
+        s_totalCollateral -= _collateralAmountToDecrease;
+
+        /// @dev revert if max leverage exceeded
+        if (_isMaxLeverageExceeded(_positionId)) revert Positions__MaxLeverageExceeded();
+        emit PositionCollateralDecreased(_positionId, position.collateralAmount - _collateralAmountToDecrease);
+
+        i_vault.approve(_collateralAmountToDecrease);
+        i_usdc.safeTransferFrom(address(i_vault), msg.sender, _collateralAmountToDecrease);
+    }
+
+    function liquidate() external {}
 
     /*//////////////////////////////////////////////////////////////
                            INTERNAL FUNCTIONS

@@ -14,6 +14,7 @@ contract Vault is IVault, ERC4626 {
     error Vault__InsufficientLiquidity();
     error Vault__PublicMintDisabled();
     error Vault__PublicRedeemDisabled();
+    error Vault__OnlyPositions();
 
     /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
@@ -28,7 +29,7 @@ contract Vault is IVault, ERC4626 {
     }
 
     /*//////////////////////////////////////////////////////////////
-                           ERC4626 FUNCTIONS
+                       PUBLIC/EXTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
     function withdraw(uint256 assets, address receiver, address owner)
         public
@@ -41,6 +42,15 @@ contract Vault is IVault, ERC4626 {
         return super.withdraw(assets, receiver, owner);
     }
 
+    /// @dev Only callable by the Positions contract
+    function approve(uint256 _amount) external {
+        if (msg.sender != address(i_positions)) revert Vault__OnlyPositions();
+        IERC20(asset()).approve(address(i_positions), _amount);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                             VIEW FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
     /// @notice Override maxWithdraw function to consider available liquidity
     function maxWithdraw(address owner) public view override(ERC4626, IVault) returns (uint256) {
         uint256 availableLiquidity = i_positions.getAvailableLiquidity();

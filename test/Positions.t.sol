@@ -154,4 +154,43 @@ contract PositionsTest is Test {
         (,,, uint256 collateralAmountAfter,,) = positions.getPositionData(1);
         assertEq(collateralAmountAfter, FIFTY_USDC * 2);
     }
+
+    /*//////////////////////////////////////////////////////////////
+                          DECREASE COLLATERAL
+    //////////////////////////////////////////////////////////////*/
+    function test_decreaseCollateral() public {
+        uint256 sizeInTokenAmount = 0.01 ether;
+
+        vm.startPrank(trader);
+        usdc.approve(address(positions), FIFTY_USDC);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+
+        (,,, uint256 collateralAmount,,) = positions.getPositionData(1);
+
+        assertEq(collateralAmount, FIFTY_USDC);
+
+        positions.decreaseCollateral(1, FIFTY_USDC / 4);
+        vm.stopPrank();
+
+        (,,, uint256 collateralAmountAfter,,) = positions.getPositionData(1);
+        assertEq(collateralAmountAfter, collateralAmount - (FIFTY_USDC / 4));
+    }
+
+    function test_decreaseCollateral_reverts_if_max_leverage_exceeded() public {
+        uint256 sizeInTokenAmount = 0.01 ether;
+
+        vm.startPrank(trader);
+        usdc.approve(address(positions), FIFTY_USDC);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+
+        (,,, uint256 collateralAmount,,) = positions.getPositionData(1);
+
+        assertEq(collateralAmount, FIFTY_USDC);
+
+        priceFeed.updateAnswer(1000_00000000);
+
+        vm.expectRevert(Positions.Positions__MaxLeverageExceeded.selector);
+        positions.decreaseCollateral(1, FIFTY_USDC);
+        vm.stopPrank();
+    }
 }
