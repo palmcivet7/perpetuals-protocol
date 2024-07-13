@@ -19,6 +19,7 @@ contract PositionsTest is Test {
 
     address trader = makeAddr("trader");
     address liquidityProvider = makeAddr("liquidityProvider");
+    address liquidator = makeAddr("liquidator");
 
     uint256 constant FIFTY_USDC = 50_000_000;
     uint256 constant ONE_USDC = 1_000_000;
@@ -323,5 +324,50 @@ contract PositionsTest is Test {
         assertGt(sizeInTokenEnd, 0);
         assertEq(collateralEnd, collateralStart - negativeRealisedPnlScaledToUsdc);
         assertEq(endingBalance, startingBalance);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                               LIQUIDATE
+    //////////////////////////////////////////////////////////////*/
+    function test_liquidate_reverts_if_max_leverage_not_exceeded() public liquidityDeposited {
+        uint256 sizeInTokenAmount = 0.25 ether;
+
+        vm.startPrank(trader);
+        usdc.approve(address(positions), FIFTY_USDC);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+        vm.stopPrank();
+
+        vm.prank(liquidator);
+        vm.expectRevert(Positions.Positions__MaxLeverageNotExceeded.selector);
+        positions.liquidate(1);
+    }
+
+    function test_liquidate_works() public liquidityDeposited {
+        uint256 sizeInTokenAmount = 0.5 ether;
+
+        vm.startPrank(trader);
+        usdc.approve(address(positions), FIFTY_USDC);
+        positions.openPosition(sizeInTokenAmount, FIFTY_USDC, true);
+        vm.stopPrank();
+
+        priceFeed.updateAnswer(1950_00000000);
+
+        int256 pnl = positions.getPositionPnl(1);
+        (,,, uint256 collateral,,) = positions.getPositionData(1);
+        uint256 negativePnl = uint256(pnl.abs());
+        uint256 negativePnlScaledToUsdc = negativePnl / (1e18 / 1e6);
+        assertGt(collateral, negativePnlScaledToUsdc);
+        uint256 remainingCollateral = collateral - negativePnlScaledToUsdc;
+        uint256 expectedReward = (remainingCollateral * 2000) / 10000;
+
+        uint256 liquidatorStartingBalance = usdc.balanceOf(liquidator);
+
+        vm.prank(liquidator);
+        positions.liquidate(1);
+
+        uint256 liquidatorEndingBalance = usdc.balanceOf(liquidator);
+
+        assertGt(liquidatorEndingBalance, liquidatorStartingBalance);
+        assertEq(liquidatorEndingBalance, expectedReward);
     }
 }

@@ -26,6 +26,8 @@ contract Positions is IPositions, ReentrancyGuard {
     error Positions__InvalidPosition();
     error Positions__InvalidPositionSize();
     error Positions__InsufficientLiquidity();
+    error Positions__MaxLeverageNotExceeded();
+    error Positions__PositionInProfit();
 
     /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
@@ -39,6 +41,7 @@ contract Positions is IPositions, ReentrancyGuard {
     /// @dev Traders cannot utilize more than a configured percentage of the deposited liquidity
     uint256 internal constant MAX_UTILIZATION_PERCENTAGE = 8000;
     uint256 internal constant BASIS_POINT_DIVISOR = 10000;
+    uint256 internal constant LIQUIDATION_BONUS = 2000;
     int256 internal constant INT_PRECISION = 10 ** 18;
 
     /// @dev Chainlink PriceFeed for the token being speculated on
@@ -89,6 +92,7 @@ contract Positions is IPositions, ReentrancyGuard {
     event PositionCollateralIncreased(uint256 indexed positionId, uint256 indexed newCollateralAmount);
     event PositionCollateralDecreased(uint256 indexed positionId, uint256 indexed newCollateralAmount);
     event PositionClosed(uint256 indexed positionId, address indexed trader, int256 indexed pnl);
+    event PositionLiquidated(uint256 indexed positionId, address indexed trader, int256 indexed pnl);
 
     /*//////////////////////////////////////////////////////////////
                                MODIFIERS
@@ -302,7 +306,40 @@ contract Positions is IPositions, ReentrancyGuard {
         i_usdc.safeTransferFrom(address(i_vault), msg.sender, _collateralAmountToDecrease);
     }
 
-    function liquidate() external {}
+    /// @notice Anyone can call this to liquidate and close an over leveraged position
+    /// @notice Liquidators are incentivized to call this as early as possible as they will receive
+    /// a liquidation reward of 20% of any remaining collateral
+    /// @dev This function is called by Chainlink Automation nodes via our AutomatedLiquidator contract
+    /// when a position becomes liquidatable to keep our system solvent
+    function liquidate(uint256 _positionId) external revertIfPositionInvalid(_positionId) nonReentrant {
+        Position memory position = s_position[_positionId];
+        if (!_isMaxLeverageExceeded(_positionId)) revert Positions__MaxLeverageNotExceeded();
+
+        // use the pnl to get any remaining collateral
+        int256 pnl = getPositionPnl(_positionId);
+        if (pnl >= 0) revert Positions__PositionInProfit(); // does this line even need to be here??
+        uint256 remainingCollateral = position.collateralAmount;
+        uint256 negativePnl = uint256(pnl.abs());
+        uint256 negativePnlScaledToUsdc = _scaleToUSDC(negativePnl);
+        if (remainingCollateral > negativePnlScaledToUsdc) remainingCollateral -= negativePnlScaledToUsdc;
+        else remainingCollateral = 0;
+
+        // Effects: Close the position
+        s_totalCollateral -= position.collateralAmount;
+        s_position[_positionId].collateralAmount = 0;
+        s_position[_positionId].sizeInToken = 0;
+        s_position[_positionId].sizeInUsd = 0;
+
+        emit PositionLiquidated(_positionId, position.trader, pnl);
+
+        // transfer 20% of any remaining collateral to the liquidator
+        if (remainingCollateral > 0) {
+            // calculate 20% of position.collateralAmount
+            uint256 liquidationReward = (remainingCollateral * LIQUIDATION_BONUS) / BASIS_POINT_DIVISOR;
+            i_vault.approve(liquidationReward);
+            i_usdc.safeTransferFrom(address(i_vault), msg.sender, liquidationReward);
+        }
+    }
 
     /*//////////////////////////////////////////////////////////////
                            INTERNAL FUNCTIONS
