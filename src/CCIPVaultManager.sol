@@ -2,6 +2,7 @@
 
 pragma solidity 0.8.24;
 
+import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import {IRouterClient} from "@chainlink/contracts-ccip/src/v0.8/ccip/interfaces/IRouterClient.sol";
 import {Client} from "@chainlink/contracts-ccip/src/v0.8/ccip/libraries/Client.sol";
 import {CCIPReceiver} from "@chainlink/contracts-ccip/src/v0.8/ccip/applications/CCIPReceiver.sol";
@@ -11,12 +12,14 @@ import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeE
 import {IVault} from "./interfaces/IVault.sol";
 import {ICCIPVaultManager} from "./interfaces/ICCIPVaultManager.sol";
 import {Constants} from "./libraries/Constants.sol";
+import {Utils} from "./libraries/Utils.sol";
 
 contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
     /*//////////////////////////////////////////////////////////////
                                LIBRARIES
     //////////////////////////////////////////////////////////////*/
     using SafeERC20 for IERC20;
+    using Utils for uint256;
 
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
@@ -34,6 +37,8 @@ contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
     IERC20 internal immutable i_usdc;
     /// @dev Vault contract native to this protocol
     IVault internal immutable i_vault;
+    /// @dev Chainlink PriceFeed for the token being speculated on
+    AggregatorV3Interface internal immutable i_priceFeed;
 
     /// @dev These are updated only by _ccipReceive
     uint256 internal s_totalOpenInterestLongInToken;
@@ -55,12 +60,13 @@ contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
-    constructor(address _router, address _link, address _usdc, address _vault)
+    constructor(address _router, address _link, address _usdc, address _priceFeed, address _vault)
         Ownable(msg.sender)
         CCIPReceiver(_router)
     {
         i_link = LinkTokenInterface(_link);
         i_usdc = IERC20(_usdc);
+        i_priceFeed = AggregatorV3Interface(_priceFeed);
         i_vault = IVault(_vault);
     }
 
@@ -117,7 +123,7 @@ contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
         // Calculate and scale the total open interest
         uint256 totalOpenInterestLong = (s_totalOpenInterestLongInToken * getLatestPrice()) / Constants.WAD_PRECISION;
         uint256 totalOpenInterest = totalOpenInterestLong + s_totalOpenInterestShortInUsd;
-        uint256 totalOpenInterestScaled = _scaleToUSDC(totalOpenInterest);
+        uint256 totalOpenInterestScaled = totalOpenInterest.scaleToUSDC();
 
         // Calculate max utilization liquidity
         uint256 maxUtilizationLiquidity =

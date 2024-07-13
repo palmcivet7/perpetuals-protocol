@@ -9,6 +9,7 @@ import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interf
 import {IPositions} from "./interfaces/IPositions.sol";
 import {IVault, Vault} from "./Vault.sol";
 import {Constants} from "./libraries/Constants.sol";
+import {Utils} from "./libraries/Utils.sol";
 
 contract Positions is IPositions, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
@@ -16,6 +17,7 @@ contract Positions is IPositions, ReentrancyGuard {
     //////////////////////////////////////////////////////////////*/
     using SafeERC20 for IERC20;
     using SignedMath for int256;
+    using Utils for uint256;
 
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
@@ -228,7 +230,7 @@ contract Positions is IPositions, ReentrancyGuard {
         if (realisedPnl > 0) {
             // If the realized PnL is positive, convert to unsigned int
             uint256 positiveRealisedPnl = uint256(realisedPnl);
-            uint256 positiveRealisedPnlScaledToUsdc = _scaleToUSDC(positiveRealisedPnl);
+            uint256 positiveRealisedPnlScaledToUsdc = uint256(realisedPnl).scaleToUSDC();
 
             // Check if there is enough liquidity in the vault to pay the PnL
             uint256 availableLiquidity = getAvailableLiquidity();
@@ -244,7 +246,7 @@ contract Positions is IPositions, ReentrancyGuard {
         } else if (realisedPnl < 0) {
             // If the realized PnL is negative, convert to unsigned int and scale to USDC precision
             uint256 negativeRealisedPnl = uint256(realisedPnl.abs());
-            uint256 negativeRealisedPnlScaledToUsdc = _scaleToUSDC(negativeRealisedPnl);
+            uint256 negativeRealisedPnlScaledToUsdc = negativeRealisedPnl.scaleToUSDC();
 
             if (collateral > negativeRealisedPnlScaledToUsdc) {
                 // Deduct the realized loss from the collateral if there is enough
@@ -321,7 +323,7 @@ contract Positions is IPositions, ReentrancyGuard {
         if (pnl >= 0) revert Positions__PositionInProfit(); // does this line even need to be here??
         uint256 remainingCollateral = position.collateralAmount;
         uint256 negativePnl = uint256(pnl.abs());
-        uint256 negativePnlScaledToUsdc = _scaleToUSDC(negativePnl);
+        uint256 negativePnlScaledToUsdc = negativePnl.scaleToUSDC();
         if (remainingCollateral > negativePnlScaledToUsdc) remainingCollateral -= negativePnlScaledToUsdc;
         else remainingCollateral = 0;
 
@@ -365,7 +367,7 @@ contract Positions is IPositions, ReentrancyGuard {
 
         uint256 currentPrice = getLatestPrice();
         uint256 sizeInUsd = (position.sizeInToken * currentPrice) / Constants.WAD_PRECISION;
-        uint256 sizeInUsdScaled = _scaleToUSDC(sizeInUsd);
+        uint256 sizeInUsdScaled = sizeInUsd.scaleToUSDC();
         uint256 effectiveCollateralByLeverage = effectiveCollateral * Constants.MAX_LEVERAGE;
 
         return (effectiveCollateralByLeverage < sizeInUsdScaled);
@@ -391,17 +393,13 @@ contract Positions is IPositions, ReentrancyGuard {
         }
     }
 
-    function _scaleToUSDC(uint256 _amount) internal pure returns (uint256) {
-        return _amount / (Constants.WAD_PRECISION / Constants.USDC_PRECISION);
-    }
-
     /*//////////////////////////////////////////////////////////////
                                  GETTER
     //////////////////////////////////////////////////////////////*/
     /// @dev Returns the latest price for the speculated asset
     function getLatestPrice() public view returns (uint256) {
         (, int256 price,,,) = i_priceFeed.latestRoundData();
-        return uint256(price) * SCALING_FACTOR;
+        return uint256(price) * Constants.SCALING_FACTOR;
     }
 
     /// @dev Returns the PnL for a position
@@ -434,7 +432,7 @@ contract Positions is IPositions, ReentrancyGuard {
         // Calculate and scale the total open interest
         uint256 totalOpenInterestLong = (s_totalOpenInterestLongInToken * getLatestPrice()) / Constants.WAD_PRECISION;
         uint256 totalOpenInterest = totalOpenInterestLong + s_totalOpenInterestShortInUsd;
-        uint256 totalOpenInterestScaled = _scaleToUSDC(totalOpenInterest);
+        uint256 totalOpenInterestScaled = totalOpenInterest.scaleToUSDC();
 
         // Calculate max utilization liquidity
         uint256 maxUtilizationLiquidity =
