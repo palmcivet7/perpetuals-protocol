@@ -25,7 +25,7 @@ Managing a position refers to increasing or decreasing the size or collateral of
 
 A profitable position can be kept open in perpetuity, whereas if the position's value drops to such a degree that the trader's collateral no longer sufficiently justifies their position, they will be automatically liquidated via Chainlink Automation. Liquidated collateral is added to the provided liquidity in the `Vault`, incentivising liquidity providers to potentially earn on their deposits.
 
-It is possible for any external address to liquidate an eligible position, receiving a liquidation bonus of 20% of any remaining collateral. However it is unlikely for external liquidators to execute liquidations before the AutomatedLiquidator.
+It is possible for any external address to liquidate an eligible position, receiving a liquidation bonus of 20% of any remaining collateral. However it is unlikely for external liquidators to execute liquidations before the `AutomatedLiquidator`.
 
 Liquidity Providers are unable to withdraw liquidity reserved for profitable positions.
 
@@ -68,7 +68,7 @@ The CCIP Manager contracts on their respective chains handle sending cross chain
 
 Chainlink's offchain Automation nodes are used to loop through the positions, checking for any that have exceeded the maximum leverage threshold, liquidating the ones that have violated this threshold based on pricefeed data, and the size and collateral of the position.
 
-If the AutomatedLiquidator receives a liquidation bonus (20% of any remaining collateral), this value will compound, eventually using Chainlink Automation to swap the USDC for LINK via Uniswap V4 (although I didn't finish this part), and funding the Automation subscription, thus being self-sufficient.
+If the `AutomatedLiquidator` receives a liquidation bonus (20% of any remaining collateral), this value will compound, eventually using Chainlink Automation to swap the USDC for LINK via Uniswap V4 (although I didn't finish this part), and funding the Automation subscription, thus being self-sufficient.
 
 This contract is automatically registered with Automatiom on deployment.
 
