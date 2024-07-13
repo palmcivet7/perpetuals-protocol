@@ -33,15 +33,25 @@ contract Vault is IVault, ERC4626 {
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
-    constructor(address _router, address _link, address _usdc, address _priceFeed)
+    constructor(
+        address _router,
+        address _link,
+        address _usdc,
+        address _priceFeed,
+        address _pythFeed,
+        bytes32 _pythFeedId
+    )
         ERC4626(IERC20(_usdc))
         ERC20("Vault USDC", "vUSDC")
         revertIfZeroAddress(_router)
         revertIfZeroAddress(_link)
         revertIfZeroAddress(_usdc)
         revertIfZeroAddress(_priceFeed)
+        revertIfZeroAddress(_pythFeed)
     {
-        i_ccipVaultManager = ICCIPVaultManager(new CCIPVaultManager(_router, _link, _usdc, _priceFeed, address(this)));
+        i_ccipVaultManager = ICCIPVaultManager(
+            new CCIPVaultManager(_router, _link, _usdc, _priceFeed, address(this)), _pythFeed, _pythFeedId
+        );
     }
 
     /*//////////////////////////////////////////////////////////////

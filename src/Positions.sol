@@ -6,6 +6,7 @@ import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeE
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {SignedMath} from "@openzeppelin/contracts/utils/math/SignedMath.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+import {IPyth, PythStructs} from "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
 import {IPositions} from "./interfaces/IPositions.sol";
 import {ICCIPPositionsManager, CCIPPositionsManager} from "./CCIPPositionsManager.sol";
 import {Constants} from "./libraries/Constants.sol";
@@ -41,6 +42,10 @@ contract Positions is IPositions, ReentrancyGuard {
     IERC20 internal immutable i_usdc;
     /// @dev Contract that handles crosschain messaging
     ICCIPPositionsManager internal immutable i_ccipPositionsManager;
+    /// @dev Pyth pricefeed contract for the token being speculated on
+    IPyth internal immutable i_pythFeed;
+    /// @dev Pyth pricefeed ID for the token being speculated on
+    bytes32 internal immutable i_pythFeedId;
 
     /// @dev Maps position ID to a position
     mapping(uint256 positionId => Position position) internal s_position;
@@ -99,12 +104,18 @@ contract Positions is IPositions, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
-    constructor(address _router, address _link, address _usdc, address _priceFeed)
-        revertIfZeroAddress(_priceFeed)
-        revertIfZeroAddress(_usdc)
-    {
+    constructor(
+        address _router,
+        address _link,
+        address _usdc,
+        address _priceFeed,
+        address _pythFeed,
+        bytes32 _pythFeedId
+    ) revertIfZeroAddress(_priceFeed) revertIfZeroAddress(_usdc) revertIfZeroAddress(_pythFeed) {
         i_priceFeed = AggregatorV3Interface(_priceFeed);
         i_usdc = IERC20(_usdc);
+        i_pythFeed = IPyth(_pythFeed);
+        i_pythFeedId = _pythFeedId;
         i_ccipPositionsManager =
             ICCIPPositionsManager(new CCIPPositionsManager(_router, _link, _usdc, address(this), msg.sender));
     }
@@ -395,10 +406,18 @@ contract Positions is IPositions, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                                  GETTER
     //////////////////////////////////////////////////////////////*/
-    /// @dev Returns the latest price for the speculated asset
+    /// @dev Returns the latest price for the speculated asset by combining Chainlink and Pyth pricefeeds
     function getLatestPrice() public view returns (uint256) {
         (, int256 price,,,) = i_priceFeed.latestRoundData();
-        return uint256(price) * Constants.SCALING_FACTOR;
+        // return uint256(price) * Constants.SCALING_FACTOR;
+
+        PythStructs.Price memory priceStruct = i_pythFeed.getPriceUnsafe(i_pythFeedId);
+        uint256 pythPrice8Decimals = (uint256(uint64(priceStruct.price)) * Constants.WAD_PRECISION)
+            / (10 ** uint8(uint32(-1 * priceStruct.expo)));
+
+        uint256 finalPrice = (uint256(price) + pythPrice8Decimals) / 2;
+
+        return finalPrice * Constants.SCALING_FACTOR;
     }
 
     /// @dev Returns the PnL for a position
