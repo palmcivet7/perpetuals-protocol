@@ -16,6 +16,7 @@ contract AutomatedLiquidator is Ownable, AutomationCompatible {
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
     error AutomatedLiquidator__AutomationRegistrationFailed();
+    error AutomatedLiquidator__OnlyForwarder();
 
     /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
@@ -89,5 +90,18 @@ contract AutomatedLiquidator is Ownable, AutomationCompatible {
         return (false, bytes(""));
     }
 
-    function performUpkeep(bytes calldata performData) external {}
+    /// @dev Called by the Automation forwarder address
+    /// @dev Liquidates undercollateralized positions to keep our Perpetuals Protocol solvent
+    function performUpkeep(bytes calldata performData) external {
+        if (msg.sender != s_forwarder) revert AutomatedLiquidator__OnlyForwarder();
+        uint256 positionId = abi.decode(performData, (uint256));
+        i_perpetual.liquidate(positionId);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                                 SETTER
+    //////////////////////////////////////////////////////////////*/
+    function setForwarder(address _forwarder) external onlyOwner {
+        s_forwarder = _forwarder;
+    }
 }
