@@ -10,7 +10,7 @@ remappings = [
     "@pythnetwork/pyth-sdk-solidity=lib/pyth-sdk-solidity",
     "@chainlink-local/=lib/chainlink-local/",
     "@uniswap/v4-periphery=lib/v4-periphery/contracts",
-    "@uniswap/v4-core=lib/v4-core/src",
+    "@uniswap/v4-core/contracts=lib/v4-core/src",
 ]
 optimizer = true
 optimizer_runs = 200
