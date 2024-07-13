@@ -10,7 +10,9 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IPositions} from "./interfaces/IPositions.sol";
 import {ICCIPPositionsManager} from "./interfaces/ICCIPPositionsManager.sol";
+import {Constants} from "./libraries/Constants.sol";
 
+/// @notice Deposited collateral is held by this contract
 contract CCIPPositionsManager is ICCIPPositionsManager, Ownable, CCIPReceiver {
     /*//////////////////////////////////////////////////////////////
                                LIBRARIES
@@ -23,6 +25,7 @@ contract CCIPPositionsManager is ICCIPPositionsManager, Ownable, CCIPReceiver {
     error CCIPPositionsManager__OnlyVault();
     error CCIPPositionsManager__WrongSender(address wrongSender);
     error CCIPPositionsManager__WrongSourceChain(uint64 wrongChainSelector);
+    error CCIPPositionsManager__InsufficientLinkBalance(uint256 balance, uint256 fees);
 
     /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
@@ -45,6 +48,17 @@ contract CCIPPositionsManager is ICCIPPositionsManager, Ownable, CCIPReceiver {
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
+    event PositionsMessageSent(
+        bytes32 indexed messageId,
+        uint256 _liquidatedCollateralAmount,
+        uint256 _profitAmountRequest,
+        address _profitRecipientRequest,
+        uint256 _openInterestLongInToken,
+        uint256 _openInterestShortInUsd,
+        bool _increaseLongInToken,
+        bool _increaseShortInUsd,
+        uint256 fees
+    );
     event PositionsMessageReceived(
         uint256 _liquidityAmount, bool _isDeposit, uint256 _profitAmount, address _profitRecipient
     );
@@ -73,7 +87,9 @@ contract CCIPPositionsManager is ICCIPPositionsManager, Ownable, CCIPReceiver {
                                   CCIP
     //////////////////////////////////////////////////////////////*/
     function ccipSend(
-        uint256 _usdcAmount,
+        uint256 _liquidatedCollateralAmount,
+        uint256 _profitAmountRequest,
+        address _profitRecipientRequest,
         uint256 _openInterestLongInToken,
         uint256 _openInterestShortInUsd,
         bool _increaseLongInToken,
@@ -83,6 +99,70 @@ contract CCIPPositionsManager is ICCIPPositionsManager, Ownable, CCIPReceiver {
         uint64 destinationChainSelector = s_vaultManagerChainSelector;
 
         Client.EVM2AnyMessage memory evm2AnyMessage;
+
+        if (_liquidatedCollateralAmount > 0) {
+            Client.EVMTokenAmount[] memory tokenAmounts = new Client.EVMTokenAmount[](1);
+            tokenAmounts[0] = Client.EVMTokenAmount({token: address(i_usdc), amount: _liquidatedCollateralAmount});
+
+            evm2AnyMessage = Client.EVM2AnyMessage({
+                receiver: abi.encode(receiver),
+                data: abi.encode(
+                    _liquidatedCollateralAmount,
+                    _profitAmountRequest,
+                    _profitRecipientRequest,
+                    _openInterestLongInToken,
+                    _openInterestShortInUsd,
+                    _increaseLongInToken,
+                    _increaseShortInUsd
+                ),
+                tokenAmounts: tokenAmounts,
+                extraArgs: Client._argsToBytes(Client.EVMExtraArgsV1({gasLimit: Constants.CCIP_GAS_LIMIT})), // needs to be set
+                feeToken: address(i_link)
+            });
+
+            i_usdc.approve(i_ccipRouter, _liquidatedCollateralAmount);
+        } else {
+            // dont send tokenAmounts
+            evm2AnyMessage = Client.EVM2AnyMessage({
+                receiver: abi.encode(receiver),
+                data: abi.encode(
+                    _liquidatedCollateralAmount,
+                    _profitAmountRequest,
+                    _profitRecipientRequest,
+                    _openInterestLongInToken,
+                    _openInterestShortInUsd,
+                    _increaseLongInToken,
+                    _increaseShortInUsd
+                ),
+                tokenAmounts: new Client.EVMTokenAmount[](0),
+                extraArgs: Client._argsToBytes(Client.EVMExtraArgsV1({gasLimit: Constants.CCIP_GAS_LIMIT})),
+                feeToken: address(i_link)
+            });
+        }
+
+        uint256 fees = IRouterClient(i_ccipRouter).getFee(destinationChainSelector, evm2AnyMessage);
+        if (fees > i_link.balanceOf(address(this))) {
+            revert CCIPPositionsManager__InsufficientLinkBalance(i_link.balanceOf(address(this)), fees);
+        }
+
+        // approve the Router to transfer LINK tokens on contract's behalf. It will spend the fees in LINK
+        i_link.approve(address(i_ccipRouter), fees);
+
+        // Send the message through the router and store the returned message ID
+        bytes32 messageId = IRouterClient(i_ccipRouter).ccipSend(destinationChainSelector, evm2AnyMessage);
+
+        // emit messageSent event
+        emit PositionsMessageSent(
+            messageId,
+            _liquidatedCollateralAmount,
+            _profitAmountRequest,
+            _profitRecipientRequest,
+            _openInterestLongInToken,
+            _openInterestShortInUsd,
+            _increaseLongInToken,
+            _increaseShortInUsd,
+            fees
+        );
     }
 
     function _ccipReceive(Client.Any2EVMMessage memory _message) internal override {

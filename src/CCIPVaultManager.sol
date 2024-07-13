@@ -24,7 +24,7 @@ contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
-    error CCIPVaultManager__OnlyVault();
+    error CCIPVaultManager__OnlyVaultOrRouter(address wrongCaller);
     error CCIPVaultManager__WrongSender(address wrongSender);
     error CCIPVaultManager__WrongSourceChain(uint64 wrongChainSelector);
     error CCIPVaultManager__InsufficientLinkBalance(uint256 balance, uint256 fees);
@@ -61,12 +61,23 @@ contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
         address profitRecipient,
         uint256 fees
     );
+    event VaultMessageReceived(
+        uint256 liquidatedCollateralAmount,
+        uint256 profitAmountRequest,
+        address profitRecipientRequest,
+        uint256 openInterestLongInToken,
+        uint256 openInterestShortInUsd,
+        bool increaseLongInToken,
+        bool increaseShortInUsd
+    );
 
     /*//////////////////////////////////////////////////////////////
                                MODIFIERS
     //////////////////////////////////////////////////////////////*/
-    modifier onlyVault() {
-        if (msg.sender != address(i_vault)) revert CCIPVaultManager__OnlyVault();
+    modifier onlyVaultOrRouter() {
+        if (msg.sender != address(i_vault) && msg.sender != address(i_ccipRouter)) {
+            revert CCIPVaultManager__OnlyVaultOrRouter(msg.sender);
+        }
         _;
     }
 
@@ -93,8 +104,8 @@ contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
     /// @notice if _profitAmount is 0, _profitRecipient should be address(0)
     /// @notice if _profitAmount > 0, _isDeposit should be false and _liquidityAmount should be same as _profitAmount
     function ccipSend(uint256 _liquidityAmount, bool _isDeposit, uint256 _profitAmount, address _profitRecipient)
-        external
-        onlyVault
+        public
+        onlyVaultOrRouter
     {
         address receiver = s_positionsManager;
         uint64 destinationChainSelector = s_positionsManagerChainSelector;
@@ -154,12 +165,14 @@ contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
         }
 
         (
-            uint256 _usdcAmount,
+            uint256 _liquidatedCollateralAmount,
+            uint256 _profitAmountRequest,
+            address _profitRecipientRequest,
             uint256 _openInterestLongInToken,
             uint256 _openInterestShortInUsd,
             bool _increaseLongInToken,
             bool _increaseShortInUsd
-        ) = abi.decode(_message.data, (uint256, uint256, uint256, bool, bool));
+        ) = abi.decode(_message.data, (uint256, uint256, address, uint256, uint256, bool, bool));
 
         if (_increaseLongInToken) {
             s_totalOpenInterestLongInToken += _openInterestLongInToken;
@@ -172,6 +185,22 @@ contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
         } else if (_openInterestShortInUsd > 0) {
             s_totalOpenInterestShortInUsd -= _openInterestShortInUsd;
         }
+
+        if (_profitAmountRequest > 0) {
+            ccipSend(_profitAmountRequest, false, _profitAmountRequest, _profitRecipientRequest);
+        }
+
+        emit VaultMessageReceived(
+            _liquidatedCollateralAmount,
+            _profitAmountRequest,
+            _profitRecipientRequest,
+            _openInterestLongInToken,
+            _openInterestShortInUsd,
+            _increaseLongInToken,
+            _increaseShortInUsd
+        );
+
+        if (_liquidatedCollateralAmount > 0) i_usdc.safeTransfer(address(i_vault), _liquidatedCollateralAmount);
     }
 
     /*//////////////////////////////////////////////////////////////

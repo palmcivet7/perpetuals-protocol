@@ -229,7 +229,6 @@ contract Positions is IPositions, ReentrancyGuard {
 
         if (realisedPnl > 0) {
             // If the realized PnL is positive, convert to unsigned int
-            uint256 positiveRealisedPnl = uint256(realisedPnl);
             uint256 positiveRealisedPnlScaledToUsdc = uint256(realisedPnl).scaleToUSDC();
 
             // Check if there is enough liquidity in the vault to pay the PnL
