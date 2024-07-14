@@ -108,7 +108,7 @@ This contract is automatically registered with Automation on deployment.
 
 **What makes a position liquidatable?**
 
-A position becomes liquidatable when it’s collateral is deemed insufficient to support the size of position that is open.
+A position becomes liquidatable when its collateral is deemed insufficient to support the size of position that is open.
 
 For our implementations we will use a _leverage_ check to define whether a position is liquidatable or not:
 
