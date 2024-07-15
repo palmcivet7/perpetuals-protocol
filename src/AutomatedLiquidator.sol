@@ -15,7 +15,7 @@ import {PoolKey} from "@uniswap/v4-core/contracts/types/PoolKey.sol";
 import {BalanceDelta} from "@uniswap/v4-core/contracts/types/BalanceDelta.sol";
 import {IPositions} from "./interfaces/IPositions.sol";
 
-contract AutomatedLiquidator is Ownable, AutomationCompatible, IUnlockCallback {
+contract AutomatedLiquidator is Ownable, AutomationCompatible {
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
@@ -121,82 +121,82 @@ contract AutomatedLiquidator is Ownable, AutomationCompatible, IUnlockCallback {
         i_positions.liquidate(positionId);
 
         // if we have more than 100 USDC in the contract, swap it for LINK and fund automation
-        if (i_usdc.balanceOf(address(this)) > SWAP_THRESHOLD) _swapLiquidationRewardsAndFundAutomation();
+        // if (i_usdc.balanceOf(address(this)) > SWAP_THRESHOLD) _swapLiquidationRewardsAndFundAutomation();
     }
 
     /*//////////////////////////////////////////////////////////////
                                 UNISWAP
     //////////////////////////////////////////////////////////////*/
-    function _swapLiquidationRewardsAndFundAutomation() internal {
-        uint256 balance = i_usdc.balanceOf(address(this));
+    // function _swapLiquidationRewardsAndFundAutomation() internal {
+    //     uint256 balance = i_usdc.balanceOf(address(this));
 
-        // Approve pool manager to spend USDC
-        i_usdc.approve(address(i_poolManager), balance);
+    //     // Approve pool manager to spend USDC
+    //     i_usdc.approve(address(i_poolManager), balance);
 
-        // Encode the data for unlocking
-        bytes memory data = abi.encode(balance);
+    //     // Encode the data for unlocking
+    //     bytes memory data = abi.encode(balance);
 
-        // Call unlock on the pool manager, which will call unlockCallback
-        i_poolManager.unlock(data);
-    }
+    //     // Call unlock on the pool manager, which will call unlockCallback
+    //     i_poolManager.unlock(data);
+    // }
 
-    function unlockCallback(bytes calldata data) external override returns (bytes memory) {
-        if (msg.sender != address(i_poolManager)) revert AutomatedLiquidator__OnlyPoolManager();
+    // function unlockCallback(bytes calldata data) external override returns (bytes memory) {
+    //     if (msg.sender != address(i_poolManager)) revert AutomatedLiquidator__OnlyPoolManager();
 
-        (uint256 amountUSDC) = abi.decode(data, (uint256));
+    //     (uint256 amountUSDC) = abi.decode(data, (uint256));
 
-        // Swap USDC to WETH
-        PoolKey memory usdcWethKey = PoolKey({
-            currency0: address(i_usdc),
-            currency1: address(i_weth),
-            fee: 3000, // Assuming a 0.3% fee tier
-            tickSpacing: , ///  int24 tickSpacing; @notice Ticks that involve positions must be a multiple of tick spacing
-            hooks: // IHooks hooks;/// @notice The hooks of the pool
-        });
+    //     // Swap USDC to WETH
+    //     PoolKey memory usdcWethKey = PoolKey({
+    //         currency0: address(i_usdc),
+    //         currency1: address(i_weth),
+    //         fee: 3000, // Assuming a 0.3% fee tier
+    //         tickSpacing: , ///  int24 tickSpacing; @notice Ticks that involve positions must be a multiple of tick spacing
+    //         hooks: // IHooks hooks;/// @notice The hooks of the pool
+    //     });
 
-        IPoolManager.SwapParams memory usdcWethParams = IPoolManager.SwapParams({
-            zeroForOne: true, // Swapping USDC (currency0) for WETH (currency1)
-            amountSpecified: int256(amountUSDC),
-            sqrtPriceLimitX96: 0 // Setting to zero to allow any price, bad practice but just for simplicity
-        });
+    //     IPoolManager.SwapParams memory usdcWethParams = IPoolManager.SwapParams({
+    //         zeroForOne: true, // Swapping USDC (currency0) for WETH (currency1)
+    //         amountSpecified: int256(amountUSDC),
+    //         sqrtPriceLimitX96: 0 // Setting to zero to allow any price, bad practice but just for simplicity
+    //     });
 
-        bytes memory hookDataForUSDCtoWETH = "";
+    //     bytes memory hookDataForUSDCtoWETH = "";
 
-        BalanceDelta balanceDeltaWETH = i_poolManager.swap(usdcWethKey, usdcWethParams, hookDataForUSDCtoWETH);
+    //     BalanceDelta balanceDeltaWETH = i_poolManager.swap(usdcWethKey, usdcWethParams, hookDataForUSDCtoWETH);
 
-        // Extract WETH amount received from balanceDeltaWETH
-        uint256 amountWETHReceived = uint256(balanceDeltaWETH.delta1);
+    //     // Extract WETH amount received from balanceDeltaWETH
+    //     uint256 amountWETHReceived = uint256(balanceDeltaWETH.delta1);
 
-        // Approve pool manager to spend WETH
-        i_weth.approve(address(i_poolManager), amountWETHReceived);
+    //     // Approve pool manager to spend WETH
+    //     i_weth.approve(address(i_poolManager), amountWETHReceived);
 
-        // Swap WETH to LINK
-        PoolKey memory wethLinkKey = PoolKey({
-            currency0: address(i_weth),
-            currency1: address(i_link),
-            fee: 3000, // Assuming a 0.3% fee tier
-            tickSpacing: , ///  int24 tickSpacing; @notice Ticks that involve positions must be a multiple of tick spacing
-            hooks: // IHooks hooks;/// @notice The hooks of the pool
-        });             
+    //     // Swap WETH to LINK
+    //     PoolKey memory wethLinkKey = PoolKey({
+    //         currency0: address(i_weth),
+    //         currency1: address(i_link),
+    //         fee: 3000, // Assuming a 0.3% fee tier
+    //         tickSpacing: , ///  int24 tickSpacing; @notice Ticks that involve positions must be a multiple of tick spacing
+    //         hooks: // IHooks hooks;/// @notice The hooks of the pool
+    //     });
 
-        IPoolManager.SwapParams memory wethLinkParams = IPoolManager.SwapParams({
-            zeroForOne: true, // Swapping WETH (currency0) for LINK (currency1)
-            amountSpecified: int256(amountWETHReceived),
-            sqrtPriceLimitX96: 0 // Setting to zero to allow any price, bad practice but just for simplicity
-        });
+    //     IPoolManager.SwapParams memory wethLinkParams = IPoolManager.SwapParams({
+    //         zeroForOne: true, // Swapping WETH (currency0) for LINK (currency1)
+    //         amountSpecified: int256(amountWETHReceived),
+    //         sqrtPriceLimitX96: 0 // Setting to zero to allow any price, bad practice but just for simplicity
+    //     });
 
-        bytes memory hookDataForWETHtoLINK = "";
+    //     bytes memory hookDataForWETHtoLINK = "";
 
-        BalanceDelta balanceDeltaLINK = i_poolManager.swap(wethLinkKey, wethLinkParams, hookDataForWETHtoLINK);
+    //     BalanceDelta balanceDeltaLINK = i_poolManager.swap(wethLinkKey, wethLinkParams, hookDataForWETHtoLINK);
 
-        // Extract LINK amount received from balanceDeltaLINK
-        uint256 amountLINKReceived = uint256(balanceDeltaLINK.delta1);
+    //     // Extract LINK amount received from balanceDeltaLINK
+    //     uint256 amountLINKReceived = uint256(balanceDeltaLINK.delta1);
 
-        // Send the swapped LINK to Chainlink automation subscription
-        i_automationConsumer.addFunds(i_subId, uint96(amountLINKReceived));
+    //     // Send the swapped LINK to Chainlink automation subscription
+    //     i_automationConsumer.addFunds(i_subId, uint96(amountLINKReceived));
 
-        return "";
-    }
+    //     return "";
+    // }
 
     /*//////////////////////////////////////////////////////////////
                                  SETTER
