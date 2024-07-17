@@ -9,7 +9,6 @@ import {CCIPReceiver} from "@chainlink/contracts-ccip/src/v0.8/ccip/applications
 import {LinkTokenInterface} from "@chainlink/contracts/src/v0.8/shared/interfaces/LinkTokenInterface.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {IPyth, PythStructs} from "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
 import {IVault} from "./interfaces/IVault.sol";
 import {ICCIPVaultManager} from "./interfaces/ICCIPVaultManager.sol";
 import {Constants} from "./libraries/Constants.sol";
@@ -41,10 +40,6 @@ contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
     IVault internal immutable i_vault;
     /// @dev Chainlink PriceFeed for the token being speculated on
     AggregatorV3Interface internal immutable i_priceFeed;
-    /// @dev Pyth pricefeed contract for the token being speculated on
-    IPyth internal immutable i_pythFeed;
-    /// @dev Pyth pricefeed ID for the token being speculated on
-    bytes32 internal immutable i_pythFeedId;
 
     /// @dev These are updated only by _ccipReceive
     uint256 internal s_totalOpenInterestLongInToken;
@@ -89,22 +84,14 @@ contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
-    constructor(
-        address _router,
-        address _link,
-        address _usdc,
-        address _priceFeed,
-        address _vault,
-        address _pythFeed,
-        bytes32 _pythFeedId,
-        address _owner
-    ) Ownable(_owner) CCIPReceiver(_router) {
+    constructor(address _router, address _link, address _usdc, address _priceFeed, address _vault, address _owner)
+        Ownable(_owner)
+        CCIPReceiver(_router)
+    {
         i_link = LinkTokenInterface(_link);
         i_usdc = IERC20(_usdc);
         i_priceFeed = AggregatorV3Interface(_priceFeed);
         i_vault = IVault(_vault);
-        i_pythFeed = IPyth(_pythFeed);
-        i_pythFeedId = _pythFeedId;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -221,24 +208,8 @@ contract CCIPVaultManager is CCIPReceiver, Ownable, ICCIPVaultManager {
     //////////////////////////////////////////////////////////////*/
     /// @dev Returns the latest price for the speculated asset by combining Chainlink and Pyth pricefeeds
     function getLatestPrice() public view returns (uint256) {
-        // Fetch Chainlink price
-        (, int256 chainlinkPrice,,,) = i_priceFeed.latestRoundData();
-
-        // Scale Chainlink price from 8 decimals to 18 decimals
-        uint256 chainlinkPrice18Decimals = uint256(chainlinkPrice) * Constants.SCALING_FACTOR;
-
-        // Fetch Pyth price
-        PythStructs.Price memory priceStruct = i_pythFeed.getPriceUnsafe(i_pythFeedId);
-
-        // Calculate Pyth price in 18 decimals
-        uint256 pythPrice18Decimals = (uint256(uint64(priceStruct.price)) * Constants.WAD_PRECISION)
-            / (10 ** uint8(uint32(-1 * priceStruct.expo)));
-
-        // Calculate the average price in 18 decimals
-        uint256 finalPrice18Decimals = (chainlinkPrice18Decimals + pythPrice18Decimals) / 2;
-
-        // The final price is already in 18 decimals, return it directly
-        return finalPrice18Decimals;
+        (, int256 price,,,) = i_priceFeed.latestRoundData();
+        return uint256(price) * Constants.SCALING_FACTOR;
     }
 
     /// @dev Returns the available liquidity of the protocol, excluding any collateral or reserved profits
