@@ -13,7 +13,6 @@ import {CCIPVaultManager} from "../src/CCIPVaultManager.sol";
 import {BurnMintERC677Helper} from "@chainlink-local/src/ccip/CCIPLocalSimulator.sol";
 import {Register} from "@chainlink-local/src/ccip/Register.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {MockPyth} from "./mocks/MockPyth.sol";
 import {MockWorldID} from "./mocks/MockWorldID.sol";
 
 contract PositionsTest is Test {
@@ -27,8 +26,6 @@ contract PositionsTest is Test {
     MockV3Aggregator basePriceFeed;
     BurnMintERC677Helper arbUsdc;
     BurnMintERC677Helper baseUsdc;
-    MockPyth arbPythFeed;
-    MockPyth basePythFeed;
     MockWorldID mockWorldId;
 
     CCIPLocalSimulatorFork ccipLocalSimulatorFork;
@@ -47,8 +44,6 @@ contract PositionsTest is Test {
 
     uint256 constant ARB_SEPOLIA_CHAINID = 421614;
     uint256 constant BASE_SEPOLIA_CHAINID = 84532;
-
-    bytes32 constant PYTH_FEED_ETHUSD_ID = 0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace;
 
     string constant WORLDID_APP_ID = "app_staging_704615d1d9d9dba9a0b556954779d3ae";
     string constant WORLDID_ACTION_ID = "openPosition";
@@ -87,14 +82,11 @@ contract PositionsTest is Test {
 
         // Deploy Vault on Arbitrum
         arbPriceFeed = new MockV3Aggregator(8, 2000_00000000);
-        arbPythFeed = new MockPyth(2000_00000000, 0, -8);
         vault = new Vault(
             arbSepNetworkDetails.routerAddress,
             arbSepNetworkDetails.linkAddress,
             arbSepNetworkDetails.ccipBnMAddress,
-            address(arbPriceFeed),
-            address(arbPythFeed),
-            PYTH_FEED_ETHUSD_ID
+            address(arbPriceFeed)
         );
         vaultManager = CCIPVaultManager(vault.getCcipVaultManager());
 
@@ -110,15 +102,12 @@ contract PositionsTest is Test {
         // Switch to Base and deploy Positions
         vm.selectFork(baseFork);
         basePriceFeed = new MockV3Aggregator(8, 2000_00000000);
-        basePythFeed = new MockPyth(2000_00000000, 0, -8);
         mockWorldId = new MockWorldID();
         positions = new Positions(
             baseSepNetworkDetails.routerAddress,
             baseSepNetworkDetails.linkAddress,
             baseSepNetworkDetails.ccipBnMAddress,
             address(basePriceFeed),
-            address(basePythFeed),
-            PYTH_FEED_ETHUSD_ID,
             address(mockWorldId),
             WORLDID_APP_ID,
             WORLDID_ACTION_ID
@@ -209,10 +198,8 @@ contract PositionsTest is Test {
         uint256 initialRecordedLiquidity = positionsManager.getTotalLiquidity();
 
         basePriceFeed.updateAnswer(3500_00000000);
-        basePythFeed.updatePrice(3500_00000000, 0, -8);
         vm.selectFork(arbitrumFork);
         arbPriceFeed.updateAnswer(3500_00000000);
-        arbPythFeed.updatePrice(3500_00000000, 0, -8);
 
         uint256 expectedWithdrawnAmount = vaultManager.getAvailableLiquidity();
 
@@ -335,10 +322,8 @@ contract PositionsTest is Test {
         assertEq(collateralAmount, FIFTY_USDC);
 
         basePriceFeed.updateAnswer(1000_00000000);
-        basePythFeed.updatePrice(1000_00000000, 0, -8);
         vm.selectFork(arbitrumFork);
         arbPriceFeed.updateAnswer(1000_00000000);
-        arbPythFeed.updatePrice(1000_00000000, 0, -8);
 
         vm.selectFork(baseFork);
         vm.prank(trader);
@@ -392,10 +377,8 @@ contract PositionsTest is Test {
         uint256 startingTotalCollateral = positions.getTotalCollateral();
 
         basePriceFeed.updateAnswer(2500_00000000);
-        basePythFeed.updatePrice(2500_00000000, 0, -8);
         vm.selectFork(arbitrumFork);
         arbPriceFeed.updateAnswer(2500_00000000);
-        arbPythFeed.updatePrice(2500_00000000, 0, -8);
 
         uint256 arbUsdcTransferStart = arbUsdc.balanceOf(address(vault));
 
@@ -435,10 +418,8 @@ contract PositionsTest is Test {
         uint256 startingBalance = baseUsdc.balanceOf(trader);
 
         basePriceFeed.updateAnswer(2500_00000000);
-        basePythFeed.updatePrice(2500_00000000, 0, -8);
         vm.selectFork(arbitrumFork);
         arbPriceFeed.updateAnswer(2500_00000000);
-        arbPythFeed.updatePrice(2500_00000000, 0, -8);
 
         vm.selectFork(baseFork);
         uint256 sizeToDecrease = 0.01 ether;
@@ -467,10 +448,8 @@ contract PositionsTest is Test {
         uint256 startingBalance = baseUsdc.balanceOf(trader);
 
         basePriceFeed.updateAnswer(1000_00000000);
-        basePythFeed.updatePrice(1000_00000000, 0, -8);
         vm.selectFork(arbitrumFork);
         arbPriceFeed.updateAnswer(1000_00000000);
-        arbPythFeed.updatePrice(1000_00000000, 0, -8);
 
         vm.selectFork(baseFork);
         vm.prank(trader);
@@ -497,10 +476,8 @@ contract PositionsTest is Test {
         uint256 startingBalance = baseUsdc.balanceOf(trader);
 
         basePriceFeed.updateAnswer(1700_00000000);
-        basePythFeed.updatePrice(1700_00000000, 0, -8);
         vm.selectFork(arbitrumFork);
         arbPriceFeed.updateAnswer(1700_00000000);
-        arbPythFeed.updatePrice(1700_00000000, 0, -8);
 
         vm.selectFork(baseFork);
         (, uint256 sizeInToken,, uint256 collateralStart,,) = positions.getPositionData(1);
@@ -553,10 +530,8 @@ contract PositionsTest is Test {
         vm.stopPrank();
 
         arbPriceFeed.updateAnswer(1950_00000000);
-        arbPythFeed.updatePrice(1950_00000000, 0, -8);
         vm.selectFork(baseFork);
         basePriceFeed.updateAnswer(1950_00000000);
-        basePythFeed.updatePrice(1950_00000000, 0, -8);
 
         int256 pnl = positions.getPositionPnl(1);
         (,,, uint256 collateral,,) = positions.getPositionData(1);
