@@ -109,6 +109,10 @@ contract Positions is IPositions, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
+    /// @param _router CCIP router
+    /// @param _link LINK token
+    /// @param _usdc USDC token
+    /// @param _priceFeed Chainlink pricefeed for index token/speculated asset
     constructor(
         address _router,
         address _link,
@@ -130,6 +134,9 @@ contract Positions is IPositions, ReentrancyGuard {
                            EXTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
     /// @dev Allows a trader to open a position
+    /// @param _sizeInTokenAmount The size of the position in terms of the token speculated on (1e18)
+    /// @param _collateralAmount The amount of collateral provided by the user in terms of USDC (1e6)
+    /// @param _isLong True if the user is long, false if the user is short
     function openPosition(
         uint256 _sizeInTokenAmount,
         uint256 _collateralAmount,
@@ -170,7 +177,9 @@ contract Positions is IPositions, ReentrancyGuard {
         i_usdc.safeTransferFrom(msg.sender, address(i_ccipPositionsManager), _collateralAmount);
     }
 
-    /// @dev The position trader can call this to increase the size of their position
+    /// @notice Only the position trader can call this to increase the size of their position
+    /// @param _positionId Position ID of the Position
+    /// @param _sizeInTokenAmountToIncrease Amount to increase position size by (1e18)
     function increaseSize(uint256 _positionId, uint256 _sizeInTokenAmountToIncrease)
         external
         revertIfPositionInvalid(_positionId)
@@ -193,7 +202,9 @@ contract Positions is IPositions, ReentrancyGuard {
         );
     }
 
-    /// @dev Anyone can currently call this function on behalf of other users' positions to increase the collateral
+    /// @notice Anyone can currently call this function on behalf of other users' positions
+    /// @param _positionId Position ID of the Position
+    /// @param _collateralAmountToIncrease Amount of collateral to increase position with (1e6)
     function increaseCollateral(uint256 _positionId, uint256 _collateralAmountToIncrease)
         external
         revertIfPositionInvalid(_positionId)
@@ -217,6 +228,8 @@ contract Positions is IPositions, ReentrancyGuard {
 
     /// @notice Only the position trader can call this to decrease the size of their position
     /// @notice If a position size is decreased to 0, the position will be closed
+    /// @param _positionId Position ID of the Position
+    /// @param _sizeInTokenAmountToDecrease Amount to decrease position size by (1e18)
     function decreaseSize(uint256 _positionId, uint256 _sizeInTokenAmountToDecrease)
         external
         revertIfPositionInvalid(_positionId)
@@ -302,7 +315,9 @@ contract Positions is IPositions, ReentrancyGuard {
         }
     }
 
-    /// @dev Only the position trader can call this to decrease the collateral of their position
+    /// @notice Only the position trader can call this to decrease the collateral of their position
+    /// @param _positionId Position ID of the Position
+    /// @param _collateralAmountToDecrease Amount to decrease collateral for position (1e6)
     function decreaseCollateral(uint256 _positionId, uint256 _collateralAmountToDecrease)
         external
         revertIfPositionInvalid(_positionId)
@@ -365,6 +380,7 @@ contract Positions is IPositions, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                            INTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
+    /// @notice Returns true if a position has exceeded the maximum leverage
     function _isMaxLeverageExceeded(uint256 _positionId) internal view returns (bool) {
         Position memory position = s_position[_positionId];
 
