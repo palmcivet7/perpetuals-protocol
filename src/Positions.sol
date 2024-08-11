@@ -6,7 +6,6 @@ import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeE
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {SignedMath} from "@openzeppelin/contracts/utils/math/SignedMath.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
-import {IWorldID} from "@worldcoin/contracts/src/interfaces/IWorldID.sol";
 import {IPositions} from "./interfaces/IPositions.sol";
 import {ICCIPPositionsManager, CCIPPositionsManager} from "./CCIPPositionsManager.sol";
 import {Constants} from "./libraries/Constants.sol";
@@ -20,7 +19,6 @@ contract Positions is IPositions, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using SignedMath for int256;
     using Utils for uint256;
-    using ByteHasher for bytes;
 
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
@@ -45,13 +43,7 @@ contract Positions is IPositions, ReentrancyGuard {
     IERC20 internal immutable i_usdc;
     /// @dev Contract that handles crosschain messaging
     ICCIPPositionsManager internal immutable i_ccipPositionsManager;
-    /// @dev The World ID instance that will be used for verifying proofs
-    IWorldID internal immutable i_worldId;
-    /// @dev The contract's external nullifier hash
-    uint256 internal immutable i_externalNullifier;
 
-    /// @dev Whether a nullifier hash has been used already. Used to restrict actions to a single WorldID
-    mapping(uint256 => bool) internal s_nullifierHashes;
     /// @dev Maps position ID to a position
     mapping(uint256 positionId => Position position) internal s_position;
     /// @dev Increments everytime a position is opened
@@ -113,21 +105,14 @@ contract Positions is IPositions, ReentrancyGuard {
     /// @param _link LINK token
     /// @param _usdc USDC token
     /// @param _priceFeed Chainlink pricefeed for index token/speculated asset
-    constructor(
-        address _router,
-        address _link,
-        address _usdc,
-        address _priceFeed,
-        address _worldId,
-        string memory _appId,
-        string memory _actionId
-    ) revertIfZeroAddress(_priceFeed) revertIfZeroAddress(_usdc) {
+    constructor(address _router, address _link, address _usdc, address _priceFeed)
+        revertIfZeroAddress(_priceFeed)
+        revertIfZeroAddress(_usdc)
+    {
         i_priceFeed = AggregatorV3Interface(_priceFeed);
         i_usdc = IERC20(_usdc);
         i_ccipPositionsManager =
             ICCIPPositionsManager(new CCIPPositionsManager(_router, _link, _usdc, address(this), msg.sender));
-        i_worldId = IWorldID(_worldId);
-        i_externalNullifier = abi.encodePacked(abi.encodePacked(_appId).hashToField(), _actionId).hashToField();
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -137,21 +122,12 @@ contract Positions is IPositions, ReentrancyGuard {
     /// @param _sizeInTokenAmount The size of the position in terms of the token speculated on (1e18)
     /// @param _collateralAmount The amount of collateral provided by the user in terms of USDC (1e6)
     /// @param _isLong True if the user is long, false if the user is short
-    function openPosition(
-        uint256 _sizeInTokenAmount,
-        uint256 _collateralAmount,
-        bool _isLong,
-        uint256 _root,
-        uint256 _nullifierHash,
-        uint256[8] calldata _proof
-    ) external revertIfZeroAmount(_sizeInTokenAmount) revertIfZeroAmount(_collateralAmount) nonReentrant {
-        // Check and verify the WorldID uniqueness of the caller to mitigate manipulation by bots
-        if (s_nullifierHashes[_nullifierHash]) revert Positions__InvalidNullifier();
-        i_worldId.verifyProof(
-            _root, abi.encodePacked(msg.sender).hashToField(), _nullifierHash, i_externalNullifier, _proof
-        );
-        s_nullifierHashes[_nullifierHash] = true;
-
+    function openPosition(uint256 _sizeInTokenAmount, uint256 _collateralAmount, bool _isLong)
+        external
+        revertIfZeroAmount(_sizeInTokenAmount)
+        revertIfZeroAmount(_collateralAmount)
+        nonReentrant
+    {
         // Now open a position
         uint256 currentPrice = getLatestPrice();
         uint256 sizeInUsd = (_sizeInTokenAmount * currentPrice) / Constants.WAD_PRECISION;
