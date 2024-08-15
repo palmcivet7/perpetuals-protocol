@@ -13,21 +13,11 @@ contract DeployPositions is Script {
     address constant USDC_TOKEN_BASE_SEP = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;
     address constant WETH_TOKEN_BASE_SEP = 0x4200000000000000000000000000000000000006;
     address constant ETHUSD_CHAINLINK_PRICEFEED = 0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1;
-    address constant WORLD_ID_BASE_SEP = 0x42FF98C4E85212a5D31358ACbFe76a621b50fC02;
-    string constant WORLD_ID_APP_ID = "app_staging_704615d1d9d9dba9a0b556954779d3ae";
-    string constant WORLD_ID_ACTION_ID = "openPosition";
 
     function run() external returns (Positions, CCIPPositionsManager) {
         vm.startBroadcast();
-        Positions positions = new Positions(
-            CCIP_ROUTER_BASE_SEP,
-            LINK_TOKEN_BASE_SEP,
-            USDC_TOKEN_BASE_SEP,
-            ETHUSD_CHAINLINK_PRICEFEED,
-            WORLD_ID_BASE_SEP,
-            WORLD_ID_APP_ID,
-            WORLD_ID_ACTION_ID
-        );
+        Positions positions =
+            new Positions(CCIP_ROUTER_BASE_SEP, LINK_TOKEN_BASE_SEP, USDC_TOKEN_BASE_SEP, ETHUSD_CHAINLINK_PRICEFEED);
         CCIPPositionsManager positionsManager = CCIPPositionsManager(positions.getCcipPositionsManager());
 
         vm.stopBroadcast();
