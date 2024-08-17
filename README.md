@@ -41,9 +41,7 @@ There are two different _directions_ a perpetual position can take.
 
 It is possible for any external address to liquidate an eligible position, receiving a liquidation bonus of 20% of any remaining collateral. However it is unlikely for external liquidators to execute liquidations before the `AutomatedLiquidator`.
 
-Chainlink and Pyth pricefeeds are combined to get an average price of the asset being speculated on.
-
-Positions can only be opened by users with unique Worldcoin IDs. Open positions are limited to one per WorldID. This is to mitigate manipulation of the system by bots.
+Chainlink pricefeeds are used to get the price of the asset being speculated on.
 
 Open interest is the measure of the aggregate size of all open positions.
 
@@ -122,7 +120,7 @@ During liquidation, a position is force closed so that the protocol can remain s
 
 ## Roles
 
-- Trader: A unique WorldID user who has a perpetual position and
+- Trader: A user who has a perpetual position
 - Liquidity Provider: Someone who provides liquidity to the system
 
 Traders are the actors opening perpetual positions and betting on the price of the _index token_.
