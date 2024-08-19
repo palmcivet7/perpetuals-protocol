@@ -7,9 +7,6 @@
 [submodule "lib/chainlink"]
 	path = lib/chainlink
 	url = https://github.com/smartcontractkit/chainlink
-[submodule "lib/world-id-contracts"]
-	path = lib/world-id-contracts
-	url = https://github.com/worldcoin/world-id-contracts
 [submodule "lib/chainlink-local"]
 	path = lib/chainlink-local
 	url = https://github.com/smartcontractkit/chainlink-local
