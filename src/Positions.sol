@@ -414,7 +414,7 @@ contract Positions is IPositions, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                                  GETTER
     //////////////////////////////////////////////////////////////*/
-    /// @dev Returns the latest price for the speculated asset by combining Chainlink and Pyth pricefeeds
+    /// @dev Returns the latest price for the speculated asset from Chainlink pricefeeds
     function getLatestPrice() public view returns (uint256) {
         (, int256 price,,,) = i_priceFeed.latestRoundData();
         return uint256(price) * Constants.SCALING_FACTOR;
